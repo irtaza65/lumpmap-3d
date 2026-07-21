@@ -1,7 +1,14 @@
 {
   "name": "lumpmap-3d",
   "version": "1.0.0",
+  "description": "An anatomy-first 3D educational navigator for common superficial lumps, built with Codex and GPT-5.6.",
   "private": true,
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/irtaza65/lumpmap-3d.git"
+  },
+  "homepage": "https://lumpmap-3d.nn3834428256300.chatgpt.site/",
   "engines": {
     "node": ">=22.13.0"
   },
