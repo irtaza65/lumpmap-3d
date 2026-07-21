@@ -22,7 +22,7 @@ interpretation, and deterministic care guidance.
 
 **Live application:** https://lumpmap-3d.nn3834428256300.chatgpt.site/
 
-**Repository:** Add the final public repository URL after it is created.
+**Repository:** https://github.com/irtaza65/lumpmap-3d
 
 ## Built with
 
