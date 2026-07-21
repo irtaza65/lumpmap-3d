@@ -16,7 +16,7 @@ const DEFAULT_MODEL = "gpt-5.6";
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const RATE_LIMIT_MAX_REQUESTS = 20;
 const RATE_LIMIT_MAX_TRACKED_KEYS = 2_048;
-const RATE_LIMIT_SALT = globalThis.crypto.randomUUID();
+let rateLimitSalt: string | undefined;
 
 type RateLimitEntry = {
   count: number;
@@ -94,10 +94,13 @@ function deploymentClientAddress(request: Request): string {
 }
 
 async function anonymousClientKey(request: Request): Promise<string> {
+  // Workers allow random generation inside a request handler, not at module
+  // evaluation time. The value remains process-local and is never persisted.
+  rateLimitSalt ??= globalThis.crypto.randomUUID();
   const digest = await globalThis.crypto.subtle.digest(
     "SHA-256",
     new TextEncoder().encode(
-      `${RATE_LIMIT_SALT}:${deploymentClientAddress(request)}`,
+      `${rateLimitSalt}:${deploymentClientAddress(request)}`,
     ),
   );
 
