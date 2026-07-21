@@ -1,19 +1,19 @@
 # Raw video handoff
 
-Place the eight screen recordings, four generated motion clips, and final voice track in this folder using these names:
+Place the nine screen recordings, three licensed real-footage clips, and final voice track in this folder using these names:
 
-- `01-hero.mp4`
-- `02-body-atlas.mp4`
-- `03-pilonidal-cutaway.mp4`
-- `04-comparison.mp4`
-- `05-roman-urdu.mp4`
-- `06-urgent-safety.mp4`
-- `07-codex-github.mp4`
-- `08-sources-privacy.mp4`
-- `ai-01-same-surface.mp4`
-- `ai-02-body-to-depth.mp4`
-- `ai-03-language-structure.mp4`
-- `ai-04-safety-boundary.mp4`
+- `01-homepage.mp4`
+- `02-atlas.mp4`
+- `03-pilonidal.mp4`
+- `04-compare.mp4`
+- `05-language.mp4`
+- `06-roman-urdu.mp4`
+- `07-urgent.mp4`
+- `08-build-proof.mp4`
+- `09-trust.mp4`
+- `stock-01-health-concern.mp4`
+- `stock-02-phone-search.mp4`
+- `stock-03-clinician-notes.mp4`
 - `voiceover.wav`
 
 The media files are intentionally ignored by Git. They remain available locally for the Remotion edit without making the public source repository unnecessarily large.

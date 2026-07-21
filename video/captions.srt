@@ -1,83 +1,86 @@
 1
-00:00:00,000 --> 00:00:07,000
-A lump can look identical on the surface—
-and be completely different underneath.
+00:00:00,000 --> 00:00:12,000
+We often call any unexplained bump a cyst. But cyst, daana, phinsi, boil, and gilti
+can describe very different structures—and different levels of urgency.
 
 2
-00:00:07,000 --> 00:00:18,000
-After dealing with cyst-related issues myself, I wanted the health explainer I wish I had:
-visual, private, multilingual, and honest about uncertainty. So I built LumpMap 3D.
+00:00:12,000 --> 00:00:24,000
+Cyst-related concerns affected me personally. I built the tool I wish I had then:
+visual, private, and honest about what it can and cannot know.
 
 3
-00:00:18,000 --> 00:00:27,000
-It starts with location. The interactive 3D atlas maps seventeen body regions,
-front and back, and works with an accessible region list.
+00:00:24,000 --> 00:00:35,000
+LumpMap 3D is not a diagnostic tool. It is an anatomy-first educational navigator.
+The journey begins with one useful clue: location.
 
 4
-00:00:27,000 --> 00:00:33,000
-Select the top of the buttock cleft,
-and it surfaces patterns worth learning about.
+00:00:35,000 --> 00:00:43,000
+Choose from seventeen body regions through a rotatable 3D body
+or searchable accessible list.
 
 5
-00:00:33,000 --> 00:00:40,000
-Then it changes scale—from the body
-to what may be happening beneath the skin.
+00:00:43,000 --> 00:00:51,000
+Selecting the top of the buttock cleft does not return a diagnosis;
+it opens patterns worth learning about.
 
 6
-00:00:40,000 --> 00:00:58,000
-Here, pilonidal disease is not presented as just another cyst. Three procedural cutaways show a normal cleft,
-a pit and sinus tract, and an inflamed stage, alongside care guidance and source-linked facts.
+00:00:51,000 --> 00:01:00,000
+Across fourteen curated lessons, the atlas changes
+from body scale to beneath-the-skin scale.
 
 7
-00:00:58,000 --> 00:01:09,000
-Comparison mode holds scale constant, making a pilonidal sinus,
-a boil, and a true epidermoid cyst visually distinct.
+00:01:00,000 --> 00:01:10,000
+For pilonidal disease, three stages show a normal cleft, a pit and sinus tract, and inflamed disease—
+labelled as possible progression, not a prediction.
 
 8
-00:01:09,000 --> 00:01:16,000
-But people rarely describe health concerns
-in clinical language.
+00:01:10,000 --> 00:01:22,000
+Comparison mode holds the tissue scale constant, so a pilonidal sinus,
+a boil, and an epidermoid cyst can be understood side by side.
 
 9
-00:01:16,000 --> 00:01:26,000
-A user can write in English, Urdu, or Roman Urdu. With a server key,
-GPT-5.6 converts everyday language into a strict Structured Output schema.
+00:01:22,000 --> 00:01:34,000
+If a user is not sure where to begin, they can describe what they noticed
+in English, Urdu, Roman Urdu, or use guided questions.
 
 10
-00:01:26,000 --> 00:01:36,000
-The public demo also keeps a local fallback,
-so the experience remains testable without exposing a key.
+00:01:34,000 --> 00:01:44,000
+With a server key, GPT-5.6 normalizes everyday wording
+into a strict structured symptom record.
 
 11
-00:01:36,000 --> 00:01:50,000
-The model does not diagnose and cannot choose urgency. Curated local records explain possible patterns,
-while the Visit Note includes only facts the user actually supplied.
+00:01:44,000 --> 00:01:54,000
+It does not diagnose, generate medical content, select matches, or decide urgency.
+The no-key demo and guided flow keep the safety experience testable.
 
 12
-00:01:50,000 --> 00:02:05,000
-Safety is deterministic. Severe pain, swelling, fever, or a location directly beside the anus
-triggers same-day guidance through local rules. GPT-5.6 cannot downgrade that result.
+00:01:54,000 --> 00:02:02,000
+For this Roman Urdu example, local matching recognizes a recurring painful armpit pattern
+and places prompt-appointment guidance before curated comparisons, including HS.
 
 13
-00:02:05,000 --> 00:02:12,000
-That boundary is deliberate: language understanding on one side;
-safety authority on the other.
+00:02:02,000 --> 00:02:09,000
+The Visit Note contains only user-supplied facts.
 
 14
-00:02:12,000 --> 00:02:24,000
-I used Codex as my primary engineering and design collaborator: scaffolding the Next.js app,
-building procedural Three.js anatomy, refining accessibility and privacy, and writing fifty-six focused tests.
+00:02:09,000 --> 00:02:18,000
+Now compare painful perianal swelling with fever. Deterministic local rules
+raise same-day urgent guidance and show the exact trigger facts.
 
 15
-00:02:24,000 --> 00:02:28,000
-The implementation was developed in this Codex task.
+00:02:18,000 --> 00:02:27,000
+GPT-5.6 cannot lower that result.
 
 16
-00:02:28,000 --> 00:02:38,000
-Every lesson shows sources and review dates. There are no accounts,
-trackers, uploads, or saved health histories.
+00:02:27,000 --> 00:02:42,000
+I built LumpMap with Codex and GPT-5.6: the interface, procedural Three.js anatomy,
+typed safety rules, accessibility, privacy protections, and fifty-six focused tests.
 
 17
-00:02:38,000 --> 00:02:48,000
-LumpMap 3D does not tell people what they have.
-It helps them see what differs, what matters, and when to seek care.
+00:02:42,000 --> 00:02:51,000
+Every lesson shows sources and review dates, with no accounts, trackers,
+photo uploads, or saved health history.
+
+18
+00:02:51,000 --> 00:02:56,000
+Learn the pattern, not a label.
