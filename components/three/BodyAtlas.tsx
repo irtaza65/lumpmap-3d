@@ -10,7 +10,13 @@ import {
   useState,
 } from "react";
 import { useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
-import { Billboard, ContactShadows, Html, OrbitControls } from "@react-three/drei";
+import {
+  Billboard,
+  ContactShadows,
+  Html,
+  Line,
+  OrbitControls,
+} from "@react-three/drei";
 import {
   Color,
   Group,
@@ -173,6 +179,7 @@ function RegionHotspot({
   onSelect,
 }: HotspotProps) {
   const group = useRef<Group>(null);
+  const pulse = useRef<Group>(null);
   const [hovered, setHovered] = useState(false);
   const { gl } = useThree();
   const z = region.side === "both"
@@ -183,7 +190,7 @@ function RegionHotspot({
     region.position[1],
     z,
   ];
-  const color = selected ? "#d97954" : hovered ? "#f3eee5" : "#a9bbb4";
+  const color = selected ? "#f57a00" : hovered ? "#147a78" : "#0e3b88";
 
   useEffect(() => {
     return () => {
@@ -194,13 +201,18 @@ function RegionHotspot({
   useFrame((_state, delta) => {
     if (!group.current) return;
     const target = selected ? 1.1 : hovered ? 1.06 : 1;
-    const scale = MathUtils.damp(
-      group.current.scale.x,
-      target,
-      reducedMotion ? 18 : 9,
-      delta,
-    );
+    const scale = reducedMotion
+      ? target
+      : MathUtils.damp(group.current.scale.x, target, 9, delta);
     group.current.scale.setScalar(scale);
+
+    if (pulse.current) {
+      const phase = reducedMotion
+        ? 0
+        : (Math.sin(_state.clock.elapsedTime * 2.2) + 1) / 2;
+      const pulseScale = selected ? 0.96 + phase * 0.28 : 0.96;
+      pulse.current.scale.setScalar(pulseScale);
+    }
   });
 
   const handleClick = (event: ThreeEvent<MouseEvent>) => {
@@ -212,16 +224,40 @@ function RegionHotspot({
     <group ref={group} position={position}>
       <Billboard follow>
         {selected && (
-          <mesh position={[0, 0, -0.012]}>
-            <circleGeometry args={[0.16, 32]} />
-            <meshBasicMaterial
-              color="#d97954"
-              transparent
-              opacity={0.1}
-              depthTest={false}
-              depthWrite={false}
-            />
-          </mesh>
+          <>
+            <mesh position={[0, 0, -0.016]}>
+              <circleGeometry args={[0.152, 40]} />
+              <meshBasicMaterial
+                color="#ffa34a"
+                transparent
+                opacity={0.16}
+                depthTest={false}
+                depthWrite={false}
+              />
+            </mesh>
+            <group ref={pulse} position={[0, 0, -0.02]}>
+              <mesh>
+                <ringGeometry args={[0.17, 0.182, 48]} />
+                <meshBasicMaterial
+                  color="#f57a00"
+                  transparent
+                  opacity={reducedMotion ? 0.44 : 0.28}
+                  depthTest={false}
+                  depthWrite={false}
+                />
+              </mesh>
+              <mesh>
+                <ringGeometry args={[0.22, 0.228, 48]} />
+                <meshBasicMaterial
+                  color="#f57a00"
+                  transparent
+                  opacity={reducedMotion ? 0.2 : 0.13}
+                  depthTest={false}
+                  depthWrite={false}
+                />
+              </mesh>
+            </group>
+          </>
         )}
         <mesh
           onClick={handleClick}
@@ -235,12 +271,13 @@ function RegionHotspot({
             gl.domElement.style.cursor = "";
           }}
         >
-          <circleGeometry args={[selected ? 0.075 : 0.048, 28]} />
+          <circleGeometry args={[selected ? 0.072 : 0.046, 36]} />
           <meshBasicMaterial
             color={color}
             transparent
-            opacity={selected ? 0.96 : hovered ? 0.82 : 0.2}
+            opacity={selected ? 1 : hovered ? 0.92 : 0.46}
             depthTest={false}
+            depthWrite={false}
           />
         </mesh>
         <mesh position={[0, 0, -0.004]}>
@@ -248,8 +285,9 @@ function RegionHotspot({
           <meshBasicMaterial
             color={color}
             transparent
-            opacity={selected ? 0.72 : hovered ? 0.46 : 0.12}
+            opacity={selected ? 0.92 : hovered ? 0.72 : 0.32}
             depthTest={false}
+            depthWrite={false}
           />
         </mesh>
       </Billboard>
@@ -268,27 +306,85 @@ function RegionHotspot({
           <div
             style={{
               padding: "5px 7px 5px 8px",
-              borderTop: `1px solid ${selected ? "rgba(217,121,84,.7)" : "rgba(225,220,210,.24)"}`,
-              borderRight: `1px solid ${selected ? "rgba(217,121,84,.7)" : "rgba(225,220,210,.24)"}`,
-              borderBottom: `1px solid ${selected ? "rgba(217,121,84,.7)" : "rgba(225,220,210,.24)"}`,
-              borderLeft: `2px solid ${selected ? "rgba(217,121,84,.7)" : "rgba(225,220,210,.24)"}`,
-              borderRadius: 1,
-              background: "rgba(9,14,17,.92)",
-              boxShadow: "0 5px 16px rgba(0,0,0,.18)",
-              color: selected ? "#f2c3ac" : "#e4e0d7",
+              border: `1px solid ${selected ? "rgba(245,122,0,.72)" : "rgba(8,42,102,.2)"}`,
+              borderLeft: `3px solid ${selected ? "#f57a00" : "#147a78"}`,
+              borderRadius: 4,
+              background: "rgba(255,250,241,.96)",
+              boxShadow: "0 7px 20px rgba(8,42,102,.14)",
+              color: selected ? "#b84200" : "#082a66",
               fontFamily: "var(--font-display), sans-serif",
               fontSize: 11,
-              fontWeight: 500,
-              letterSpacing: ".06em",
+              fontWeight: 600,
+              letterSpacing: ".045em",
               lineHeight: 1.05,
               textTransform: "uppercase",
               whiteSpace: "nowrap",
-              backdropFilter: "blur(6px)",
+              backdropFilter: "blur(8px)",
             }}
           >
             {region.shortLabel}
           </div>
         </Html>
+      )}
+    </group>
+  );
+}
+
+type TopologyPath = {
+  points: readonly [number, number, number][];
+  weight?: number;
+};
+
+const FRONT_TOPOLOGY: readonly TopologyPath[] = [
+  { points: [[0, 2.71, 0.13], [0, 2.54, 0.235], [0, 2.36, 0.272], [0, 2.18, 0.19]], weight: 0.48 },
+  { points: [[-0.16, 1.98, 0.09], [-0.09, 1.83, 0.17], [0, 1.78, 0.2], [0.09, 1.83, 0.17], [0.16, 1.98, 0.09]], weight: 0.5 },
+  { points: [[0, 1.56, 0.382], [0, 1.25, 0.385], [0, 0.92, 0.36], [0, 0.53, 0.33]], weight: 0.82 },
+  { points: [[-0.52, 1.46, 0.285], [-0.34, 1.39, 0.354], [-0.12, 1.35, 0.38], [0, 1.34, 0.385]] },
+  { points: [[0.52, 1.46, 0.285], [0.34, 1.39, 0.354], [0.12, 1.35, 0.38], [0, 1.34, 0.385]] },
+  { points: [[-0.43, 0.9, 0.327], [-0.27, 0.7, 0.347], [-0.16, 0.42, 0.34], [-0.13, 0.1, 0.31]] },
+  { points: [[0.43, 0.9, 0.327], [0.27, 0.7, 0.347], [0.16, 0.42, 0.34], [0.13, 0.1, 0.31]] },
+  { points: [[-0.48, -0.13, 0.25], [-0.28, -0.25, 0.315], [0, -0.29, 0.33], [0.28, -0.25, 0.315], [0.48, -0.13, 0.25]] },
+  { points: [[-0.32, -0.62, 0.245], [-0.34, -1.14, 0.245], [-0.32, -1.63, 0.21], [-0.32, -1.8, 0.205]] },
+  { points: [[0.32, -0.62, 0.245], [0.34, -1.14, 0.245], [0.32, -1.63, 0.21], [0.32, -1.8, 0.205]] },
+  { points: [[-0.32, -1.98, 0.165], [-0.33, -2.3, 0.17], [-0.34, -2.61, 0.13]] },
+  { points: [[0.32, -1.98, 0.165], [0.33, -2.3, 0.17], [0.34, -2.61, 0.13]] },
+  { points: [[-0.71, 1.23, 0.17], [-0.78, 0.91, 0.165], [-0.84, 0.58, 0.14], [-0.87, 0.36, 0.12]] },
+  { points: [[0.71, 1.23, 0.17], [0.78, 0.91, 0.165], [0.84, 0.58, 0.14], [0.87, 0.36, 0.12]] },
+];
+
+const BACK_TOPOLOGY: readonly TopologyPath[] = [
+  { points: [[0, 2.71, -0.13], [0, 2.54, -0.235], [0, 2.36, -0.272], [0, 2.18, -0.19]], weight: 0.48 },
+  { points: [[-0.16, 1.98, -0.09], [-0.09, 1.83, -0.17], [0, 1.78, -0.2], [0.09, 1.83, -0.17], [0.16, 1.98, -0.09]], weight: 0.5 },
+  { points: [[0, 1.7, -0.245], [0, 1.28, -0.35], [0, 0.82, -0.36], [0, 0.36, -0.335], [0, -0.03, -0.3]], weight: 0.86 },
+  { points: [[-0.55, 1.37, -0.27], [-0.38, 1.28, -0.35], [-0.24, 1.03, -0.38], [-0.34, 0.76, -0.36], [-0.5, 0.68, -0.29]] },
+  { points: [[0.55, 1.37, -0.27], [0.38, 1.28, -0.35], [0.24, 1.03, -0.38], [0.34, 0.76, -0.36], [0.5, 0.68, -0.29]] },
+  { points: [[-0.48, 0.13, -0.25], [-0.27, -0.01, -0.32], [0, -0.05, -0.34], [0.27, -0.01, -0.32], [0.48, 0.13, -0.25]] },
+  { points: [[-0.47, -0.27, -0.27], [-0.25, -0.2, -0.39], [-0.05, -0.43, -0.425]] },
+  { points: [[0.47, -0.27, -0.27], [0.25, -0.2, -0.39], [0.05, -0.43, -0.425]] },
+  { points: [[-0.31, -0.72, -0.22], [-0.34, -1.18, -0.235], [-0.32, -1.67, -0.19]] },
+  { points: [[0.31, -0.72, -0.22], [0.34, -1.18, -0.235], [0.32, -1.67, -0.19]] },
+  { points: [[-0.33, -2.02, -0.15], [-0.33, -2.34, -0.165], [-0.34, -2.61, -0.11]] },
+  { points: [[0.33, -2.02, -0.15], [0.33, -2.34, -0.165], [0.34, -2.61, -0.11]] },
+];
+
+function TopologySeams({ orientation }: { orientation: BodyOrientation }) {
+  return (
+    <group>
+      {[
+        { side: "front" as const, paths: FRONT_TOPOLOGY },
+        { side: "back" as const, paths: BACK_TOPOLOGY },
+      ].flatMap(({ side, paths }) =>
+        paths.map((path, index) => (
+          <Line
+            key={`${side}-${index}`}
+            points={path.points}
+            color={side === orientation ? "#80a4d0" : "#6684b0"}
+            lineWidth={(path.weight ?? 0.58) * (side === orientation ? 1 : 0.78)}
+            transparent
+            opacity={side === orientation ? 0.62 : 0.3}
+            depthTest
+          />
+        )),
       )}
     </group>
   );
@@ -312,31 +408,32 @@ function Mannequin({
 }: MannequinProps) {
   const materials = useMemo(() => {
     const body = new MeshPhysicalMaterial({
-      color: new Color("#bcae9f"),
-      emissive: new Color("#151311"),
-      emissiveIntensity: 0.025,
-      roughness: 0.82,
+      color: new Color("#0e3b88"),
+      emissive: new Color("#061f4c"),
+      emissiveIntensity: 0.085,
+      roughness: 0.56,
       metalness: 0,
-      clearcoat: 0,
-      sheen: 0.06,
-      sheenColor: new Color("#ead8c8"),
-      sheenRoughness: 0.96,
+      clearcoat: 0.14,
+      clearcoatRoughness: 0.82,
+      sheen: 0.24,
+      sheenColor: new Color("#8eaeda"),
+      sheenRoughness: 0.72,
     });
     const plane = new MeshPhysicalMaterial({
-      color: new Color("#9c897d"),
-      emissive: new Color("#332b28"),
-      emissiveIntensity: 0.05,
+      color: new Color("#1a58b4"),
+      emissive: new Color("#082a66"),
+      emissiveIntensity: 0.055,
       roughness: 0.7,
-      clearcoat: 0.05,
+      clearcoat: 0.04,
       transparent: true,
-      opacity: 0.68,
+      opacity: 0.34,
       depthWrite: false,
     });
     const shadow = new MeshPhysicalMaterial({
-      color: new Color("#75675f"),
-      roughness: 0.82,
+      color: new Color("#061f4c"),
+      roughness: 0.7,
       transparent: true,
-      opacity: 0.5,
+      opacity: 0.4,
       depthWrite: false,
     });
     return { body, plane, shadow };
@@ -424,16 +521,13 @@ function Mannequin({
   return (
     <group>
       <group>
-        {/* The head uses overlapping cranial, facial, and jaw volumes so the
-            front reads immediately without turning into a literal portrait. */}
-        {part("cranium", [0, 2.46, -0.015], [0.29, 0.37, 0.28])}
-        {part("face", [0, 2.31, 0.08], [0.24, 0.265, 0.23])}
-        {part("jaw", [0, 2.14, 0.035], [0.205, 0.17, 0.195])}
+        {/* A single quiet head volume keeps the atlas respectful and
+            gender-neutral; a shallow facial plane indicates orientation. */}
+        {part("head", [0, 2.42, -0.012], [0.285, 0.375, 0.27])}
+        {part("jaw", [0, 2.17, 0.025], [0.205, 0.185, 0.205])}
+        {part("face-plane", [0, 2.37, 0.252], [0.188, 0.252, 0.018], materials.plane)}
         {part("ear-l", [-0.272, 2.36, 0], [0.038, 0.09, 0.048], materials.plane)}
         {part("ear-r", [0.272, 2.36, 0], [0.038, 0.09, 0.048], materials.plane)}
-        {part("nose", [0, 2.37, 0.292], [0.045, 0.078, 0.06], materials.plane)}
-        {part("brow-l", [-0.088, 2.46, 0.272], [0.078, 0.018, 0.022], materials.plane, [0, 0, -0.05])}
-        {part("brow-r", [0.088, 2.46, 0.272], [0.078, 0.018, 0.022], materials.plane, [0, 0, 0.05])}
 
         <mesh position={[0, 1.89, 0]} material={materials.body} castShadow>
           <cylinderGeometry args={[0.165, 0.215, 0.48, 32]} />
@@ -559,6 +653,8 @@ function Mannequin({
         </mesh>
       </group>
 
+      <TopologySeams orientation={orientation} />
+
       {ATLAS_REGIONS.map((region) => {
         const visible = region.side === "both" || region.side === orientation;
         if (!visible) return null;
@@ -628,7 +724,19 @@ function AtlasControls({
   useFrame((_state, delta) => {
     const control = controls.current;
     if (!control || !moving.current) return;
-    const speed = reducedMotion ? 18 : 5.8;
+    if (reducedMotion) {
+      control.target.copy(desiredTarget);
+      orbitAngle.current = destinationAngle.current;
+      camera.position.set(
+        desiredTarget.x + Math.sin(destinationAngle.current) * desiredDistance,
+        desiredY,
+        desiredTarget.z + Math.cos(destinationAngle.current) * desiredDistance,
+      );
+      control.update();
+      moving.current = false;
+      return;
+    }
+    const speed = 5.8;
     control.target.x = MathUtils.damp(control.target.x, desiredTarget.x, speed, delta);
     control.target.y = MathUtils.damp(control.target.y, desiredTarget.y, speed, delta);
     control.target.z = MathUtils.damp(control.target.z, desiredTarget.z, speed, delta);
@@ -694,19 +802,28 @@ function AtlasScene({
 
   return (
     <>
-      <fog attach="fog" args={["#0b1112", 9.2, 16]} />
-      <ambientLight intensity={1.25} color="#eee6dc" />
-      <hemisphereLight args={["#d9dfda", "#2b2523", 1.05]} />
+      <fog attach="fog" args={["#f6f0e5", 10.4, 17]} />
+      <ambientLight intensity={1.34} color="#fff4df" />
+      <hemisphereLight args={["#fff8ec", "#b9d8d0", 1.42]} />
       <spotLight
         position={[3.8, 5.4, 4.5]}
-        angle={0.42}
-        penumbra={0.9}
-        intensity={36}
-        color="#ffe9d6"
+        angle={0.48}
+        penumbra={0.92}
+        intensity={43}
+        color="#fff1d9"
         castShadow
       />
-      <pointLight position={[-3, 1.5, -2.5]} intensity={6} color="#819b96" />
-      <pointLight position={[2.4, -1.4, 2]} intensity={4} color="#c78364" />
+      <pointLight position={[-3.2, 1.7, -2.8]} intensity={9} color="#78aaa3" />
+      <pointLight position={[2.6, -1.3, 2.4]} intensity={4.8} color="#f5b078" />
+      <mesh position={[0, -0.04, -1.35]} scale={[2.25, 3.15, 0.28]}>
+        <sphereGeometry args={[1, 48, 32]} />
+        <meshBasicMaterial
+          color="#ddece4"
+          transparent
+          opacity={0.3}
+          depthWrite={false}
+        />
+      </mesh>
       <Mannequin
         selectedRegion={selectedRegion}
         orientation={orientation}
@@ -720,15 +837,20 @@ function AtlasScene({
       />
       <ContactShadows
         position={[0, -3.05, 0]}
-        opacity={0.32}
+        opacity={0.2}
         scale={5.5}
-        blur={2.6}
+        blur={3.2}
         far={4.5}
-        color="#000b0e"
+        color="#082a66"
       />
       <mesh position={[0, -3.08, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
         <circleGeometry args={[3.2, 64]} />
-        <meshStandardMaterial color="#0a1a1f" roughness={0.92} />
+        <meshStandardMaterial
+          color="#f6f0e5"
+          roughness={1}
+          transparent
+          opacity={0.72}
+        />
       </mesh>
       <AtlasControls
         selectedRegion={selectedRegion}

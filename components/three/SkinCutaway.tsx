@@ -5,7 +5,7 @@
 import { useEffect, useMemo, useRef } from "react";
 import { ContactShadows, OrbitControls } from "@react-three/drei";
 import { useFrame, useThree } from "@react-three/fiber";
-import { MathUtils, Vector3 } from "three";
+import { MathUtils, PerspectiveCamera, Vector3 } from "three";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import { ThreeCanvasShell } from "./SceneShell";
 import { ProceduralCutawayScene } from "./scenes/CutawayScenes";
@@ -19,6 +19,7 @@ import {
 export type SkinCutawayProps = {
   condition?: CutawaySceneId;
   stage?: CutawayStage;
+  stageLabels?: readonly [string, string, string];
   showLabels?: boolean;
   reducedMotion?: boolean;
   interactive?: boolean;
@@ -42,17 +43,27 @@ function CutawayControls({
 }: CutawayControlsProps) {
   const controls = useRef<OrbitControlsImpl>(null);
   const moving = useRef(true);
-  const { camera } = useThree();
+  const { camera, size } = useThree();
+  const narrowViewport = size.width / Math.max(size.height, 1) < 0.82;
   const desiredPosition = useMemo(
-    () =>
-      condition === "ganglion_cyst"
+    () => {
+      const base = condition === "ganglion_cyst"
         ? new Vector3(4.45, 2.85, 6.25)
         : condition === "pilonidal_disease"
           ? new Vector3(4.3, 3.1, 6.2)
-          : new Vector3(4.5, 3.15, 6.3),
-    [condition],
+          : new Vector3(4.5, 3.15, 6.3);
+      return narrowViewport ? base.multiplyScalar(1.1) : base;
+    },
+    [condition, narrowViewport],
   );
   const desiredTarget = useMemo(() => new Vector3(0, -0.12, 0.25), []);
+
+  useEffect(() => {
+    if (!(camera instanceof PerspectiveCamera)) return;
+    camera.fov = narrowViewport ? 50 : 35;
+    camera.updateProjectionMatrix();
+    moving.current = true;
+  }, [camera, narrowViewport]);
 
   useEffect(() => {
     moving.current = true;
@@ -61,7 +72,14 @@ function CutawayControls({
   useFrame((_state, delta) => {
     const control = controls.current;
     if (!control || !moving.current) return;
-    const speed = reducedMotion ? 18 : 6.5;
+    if (reducedMotion) {
+      camera.position.copy(desiredPosition);
+      control.target.copy(desiredTarget);
+      control.update();
+      moving.current = false;
+      return;
+    }
+    const speed = 6.5;
     camera.position.x = MathUtils.damp(camera.position.x, desiredPosition.x, speed, delta);
     camera.position.y = MathUtils.damp(camera.position.y, desiredPosition.y, speed, delta);
     camera.position.z = MathUtils.damp(camera.position.z, desiredPosition.z, speed, delta);
@@ -82,8 +100,8 @@ function CutawayControls({
       enablePan={false}
       enableDamping={!reducedMotion}
       dampingFactor={0.08}
-      minDistance={6.1}
-      maxDistance={10.2}
+      minDistance={narrowViewport ? 8.2 : 6.1}
+      maxDistance={narrowViewport ? 13.5 : 10.2}
       minPolarAngle={0.72}
       maxPolarAngle={1.38}
       minAzimuthAngle={-0.92}
@@ -119,33 +137,38 @@ function CutawayWorld({
 
   return (
     <>
-      <fog attach="fog" args={["#090f12", 10, 18]} />
-      <ambientLight intensity={1.08} color="#f1e8dc" />
-      <hemisphereLight args={["#d9dedb", "#312728", 1.05]} />
+      <fog attach="fog" args={["#f6f0e5", 10.5, 18]} />
+      <ambientLight intensity={1.42} color="#fff3df" />
+      <hemisphereLight args={["#fff9ef", "#b8d5cf", 1.35]} />
       <spotLight
         position={[4.5, 6.5, 5.2]}
-        intensity={46}
-        angle={0.47}
-        penumbra={0.86}
-        color="#f4e6d6"
+        intensity={52}
+        angle={0.5}
+        penumbra={0.9}
+        color="#fff0db"
         castShadow
       />
-      <pointLight position={[-4, 1.8, 3]} intensity={5.5} color="#9baaa7" />
+      <pointLight position={[-4, 1.8, 3]} intensity={7.5} color="#83aaa4" />
       <pointLight
         position={[2.1, 0.4, 3.8]}
-        intensity={pathologyLight * 0.7}
+        intensity={pathologyLight * 0.46}
         color={scene.accent}
       />
       <group position={[0, 0.1, 0]}>
-        <ProceduralCutawayScene condition={condition} stage={stage} showLabels={showLabels} />
+        <ProceduralCutawayScene
+          condition={condition}
+          stage={stage}
+          showLabels={showLabels}
+          reducedMotion={reducedMotion}
+        />
       </group>
       <ContactShadows
         position={[0, -1.58, 0]}
-        opacity={0.32}
+        opacity={0.18}
         scale={7}
-        blur={2.4}
+        blur={3}
         far={4}
-        color="#02090b"
+        color="#183d70"
       />
       <CutawayControls
         condition={condition}
@@ -164,6 +187,7 @@ function CutawayWorld({
 export function SkinCutaway({
   condition = "ingrown_hair",
   stage = 0,
+  stageLabels,
   showLabels = true,
   reducedMotion = false,
   interactive = true,
@@ -172,6 +196,7 @@ export function SkinCutaway({
   onStatusChange,
 }: SkinCutawayProps) {
   const scene = CUTAWAY_SCENES[condition];
+  const resolvedStageLabels = stageLabels ?? scene.stageLabels;
   const safeStage: CutawayStage = stage < 0 ? 0 : stage > 2 ? 2 : stage;
 
   return (
@@ -187,10 +212,10 @@ export function SkinCutaway({
       }}
     >
       <ThreeCanvasShell
-        ariaLabel={`${scene.title} 3D tissue cutaway, ${scene.stageLabels[safeStage]}. ${scene.stageDescriptions[safeStage]}`}
+        ariaLabel={`${scene.title} 3D tissue cutaway, ${resolvedStageLabels[safeStage]}. ${scene.stageDescriptions[safeStage]}`}
         fallbackKind="cutaway"
         fallbackTitle={`${scene.title} 3D view unavailable`}
-        fallbackMessage={`${scene.stageLabels[safeStage]}: ${scene.stageDescriptions[safeStage]}`}
+        fallbackMessage={`${resolvedStageLabels[safeStage]}: ${scene.stageDescriptions[safeStage]}`}
         camera={{ position: [4.5, 3.15, 6.3], fov: 35, near: 0.1, far: 40 }}
         onStatusChange={onStatusChange}
       >
@@ -211,14 +236,16 @@ export function SkinCutaway({
           top: 14,
           right: 14,
           maxWidth: "min(230px, 58%)",
-          padding: "7px 10px",
-          border: `1px solid color-mix(in srgb, ${scene.accent} 50%, transparent)`,
-          borderRadius: 1,
-          background: "rgba(7, 12, 15, .9)",
-          color: "#c8cbc6",
+          padding: "8px 11px",
+          border: `1px solid color-mix(in srgb, ${scene.accent} 58%, #eadcc7)`,
+          borderLeft: `3px solid ${scene.accent}`,
+          borderRadius: 4,
+          background: "rgba(255,250,241,.94)",
+          boxShadow: "0 8px 24px rgba(8,42,102,.1)",
+          color: "#082a66",
           fontFamily: "var(--font-display), sans-serif",
           fontSize: 11,
-          fontWeight: 500,
+          fontWeight: 600,
           lineHeight: 1.2,
           letterSpacing: ".055em",
           textTransform: "uppercase",
@@ -226,10 +253,10 @@ export function SkinCutaway({
           whiteSpace: "nowrap",
           overflow: "hidden",
           pointerEvents: "none",
-          backdropFilter: "blur(4px)",
+          backdropFilter: "blur(8px)",
         }}
       >
-        {scene.stageLabels[safeStage]}
+        {resolvedStageLabels[safeStage]}
       </div>
 
       <div
@@ -238,17 +265,18 @@ export function SkinCutaway({
           left: 14,
           bottom: 12,
           padding: "7px 9px",
-          border: "1px solid rgba(205, 214, 213, .14)",
-          borderRadius: 1,
-          background: "rgba(7, 12, 15, .86)",
-          color: "#8f9997",
+          border: "1px solid rgba(20,61,119,.16)",
+          borderRadius: 4,
+          background: "rgba(240,248,243,.92)",
+          boxShadow: "0 7px 20px rgba(8,42,102,.08)",
+          color: "#31546f",
           fontFamily: "var(--font-display), sans-serif",
           fontSize: 11,
           lineHeight: 1.3,
           letterSpacing: ".05em",
           pointerEvents: "none",
           textTransform: "uppercase",
-          backdropFilter: "blur(4px)",
+          backdropFilter: "blur(8px)",
         }}
       >
         Possible progression, not a prediction.

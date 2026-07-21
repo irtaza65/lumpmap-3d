@@ -99,19 +99,26 @@ const SCENE_MAP: Record<string, CutawaySceneId> = {
   abscess: "boil_abscess",
   pilonidal: "pilonidal_disease",
   hs_tunnels: "hidradenitis_suppurativa",
-  perianal_schematic: "skin_abscess",
-  bartholin_schematic: "skin_abscess",
+  perianal_schematic: "perianal_abscess_fistula",
+  bartholin_schematic: "bartholin_cyst_abscess",
   ganglion: "ganglion_cyst",
-  acne: "folliculitis",
-  subcutaneous_mass: "epidermoid_cyst",
-  lymph_node: "epidermoid_cyst",
-  anal_vascular_schematic: "skin_abscess",
+  acne: "acne_nodule_cyst",
+  subcutaneous_mass: "lipoma",
+  lymph_node: "swollen_lymph_node",
+  anal_vascular_schematic: "hemorrhoid",
+};
+
+const CONDITION_SCENE_OVERRIDES: Partial<Record<ConditionId, CutawaySceneId>> = {
+  "boil-carbuncle": "boil_abscess",
+  "skin-abscess": "skin_abscess",
 };
 
 const NAV_ITEMS = [
+  ["Home", "#top"],
   ["Atlas", "#atlas"],
   ["Compare", "#compare"],
   ["Describe a lump", "#guide"],
+  ["Library", "#library"],
   ["Sources", "#sources"],
 ] as const;
 
@@ -127,11 +134,19 @@ function SceneLoading({ label }: { label: string }) {
 }
 
 function sceneFor(condition: ConditionRecord): CutawaySceneId {
-  return SCENE_MAP[condition.scene3d.template] ?? "epidermoid_cyst";
+  return (
+    CONDITION_SCENE_OVERRIDES[condition.id] ??
+    SCENE_MAP[condition.scene3d.template] ??
+    "epidermoid_cyst"
+  );
 }
 
 function getRegionRecord(id: BodyRegionId | AtlasRegionId): RegionRecord {
-  return REGION_BY_ID[id as AtlasRegionId] ?? REGION_BY_ID.unknown;
+  return (
+    REGION_BY_ID[id as AtlasRegionId] ??
+    REGIONS.find((region) => region.bodyRegion === id) ??
+    REGION_BY_ID.unknown
+  );
 }
 
 function scrollToId(id: string) {
@@ -151,9 +166,11 @@ export default function LumpMapApp() {
   const [orientation, setOrientation] = useState<"front" | "back">("back");
   const [stage, setStage] = useState<CutawayStage>(1);
   const [showLabels, setShowLabels] = useState(true);
-  const [reducedMotion, setReducedMotion] = useState(false);
+  const [systemReducedMotion, setSystemReducedMotion] = useState(false);
+  const [manualReducedMotion, setManualReducedMotion] = useState(false);
   const [resetKey, setResetKey] = useState(0);
   const [regionSearch, setRegionSearch] = useState("");
+  const [conditionSearch, setConditionSearch] = useState("");
   const [showAllRegions, setShowAllRegions] = useState(false);
   const [detailTab, setDetailTab] = useState<
     "pattern" | "care" | "reduce" | "sources"
@@ -168,6 +185,7 @@ export default function LumpMapApp() {
   const mobileMenuButtonRef = useRef<HTMLButtonElement>(null);
   const mobileNavRef = useRef<HTMLElement>(null);
   const mobileMenuId = useId();
+  const reducedMotion = systemReducedMotion || manualReducedMotion;
 
   const selectedRegionRecord = getRegionRecord(selectedRegion);
   const condition = CONDITION_BY_ID[selectedCondition];
@@ -191,9 +209,42 @@ export default function LumpMapApp() {
     );
   }, [regionSearch, showAllRegions]);
 
+  const filteredConditions = useMemo(() => {
+    const normalized = conditionSearch.trim().toLowerCase();
+    if (!normalized) return CONDITIONS;
+    return CONDITIONS.filter((item) =>
+      [
+        item.name,
+        item.oneLineDefinition,
+        item.tissueOrigin,
+        ...item.aliases,
+        ...item.bodyRegions,
+      ]
+        .join(" ")
+        .toLowerCase()
+        .includes(normalized),
+    );
+  }, [conditionSearch]);
+
+  const sourceDirectory = useMemo(() => {
+    const byUrl = new Map<string, Set<string>>();
+    for (const item of CONDITIONS) {
+      for (const url of item.sourceUrls) {
+        const names = byUrl.get(url) ?? new Set<string>();
+        names.add(item.name);
+        byUrl.set(url, names);
+      }
+    }
+    return Array.from(byUrl, ([url, names]) => ({
+      url,
+      names: Array.from(names),
+      domain: sourceDomain(url),
+    })).sort((a, b) => a.domain.localeCompare(b.domain));
+  }, []);
+
   useEffect(() => {
     const media = window.matchMedia("(prefers-reduced-motion: reduce)");
-    const syncPreference = () => setReducedMotion(media.matches);
+    const syncPreference = () => setSystemReducedMotion(media.matches);
     const frame = window.requestAnimationFrame(syncPreference);
     media.addEventListener("change", syncPreference);
     return () => {
@@ -262,9 +313,16 @@ export default function LumpMapApp() {
           regionId !== "unknown" &&
           Object.prototype.hasOwnProperty.call(REGION_BY_ID, regionId),
       );
-    const targetRegionId = isAtlasRegion(preferredRegion)
-      ? preferredRegion
-      : targetCondition.bodyRegions.find(isAtlasRegion);
+    const resolveAtlasRegion = (regionId: string | undefined): AtlasRegionId | undefined => {
+      if (isAtlasRegion(regionId)) return regionId;
+      return REGIONS.find((region) => region.bodyRegion === regionId)?.id;
+    };
+    const targetRegionId =
+      resolveAtlasRegion(preferredRegion) ??
+      targetCondition.bodyRegions
+        .map(resolveAtlasRegion)
+        .find((regionId): regionId is AtlasRegionId => Boolean(regionId)) ??
+      REGIONS.find((region) => region.commonConditionIds.includes(id))?.id;
 
     if (targetRegionId) {
       const region = REGION_BY_ID[targetRegionId];
@@ -290,6 +348,7 @@ export default function LumpMapApp() {
     setGuideOpen(false);
     setGuideResetKey((key) => key + 1);
     setRegionSearch("");
+    setConditionSearch("");
     setShowAllRegions(false);
     setCompareIds(DEFAULT_COMPARE);
     setMobileMenuOpen(false);
@@ -298,7 +357,7 @@ export default function LumpMapApp() {
   }
 
   return (
-    <MotionConfig reducedMotion={reducedMotion ? "always" : "never"}>
+    <MotionConfig reducedMotion={reducedMotion ? "always" : "user"}>
     <main className={reducedMotion ? "reduce-motion" : undefined}>
       <a className="skip-link" href="#atlas">
         Skip to anatomy explorer
@@ -367,83 +426,89 @@ export default function LumpMapApp() {
         <div className="hero-copy">
           <p className="eyebrow">
             <span className="eyebrow-index" aria-hidden="true">01</span>
-            Anatomy-first health education
+            A visual anatomy atlas for everyday questions
           </p>
           <h1>
             Not every lump
             <span>is a cyst.</span>
           </h1>
           <p className="hero-lede">
-            Explore common skin lumps by location, depth, and symptoms—then
-            learn what kind of care may be appropriate.
+            Start with what you know: where it is, what it feels like, or what
+            may be happening beneath the skin.
           </p>
           <div className="hero-actions">
             <a
               className="primary-button"
-              href="#atlas"
+              href="#guide"
+              onClick={() => setGuideOpen(true)}
             >
-              Explore the body <ArrowDown />
+              Describe in your own words <ArrowRight />
             </a>
             <a
               className="secondary-button"
-              href="#guide"
-              onClick={() => {
-                setGuideOpen(true);
-              }}
+              href="#atlas"
             >
-              <MessageSquareText /> Describe a lump
+              Explore the 3D body <ArrowDown />
             </a>
           </div>
           <p className="safety-line">
             <ShieldCheck aria-hidden="true" /> Educational guidance only. It
             cannot diagnose you.
           </p>
+        </div>
 
-          <div className="hero-proof" aria-label="Product principles">
-            <div>
-              <strong>2 scales</strong>
-              <span>Body to beneath the skin</span>
-            </div>
-            <div>
-              <strong>3 languages</strong>
-              <span>English, Urdu, Roman Urdu</span>
-            </div>
-            <div>
-              <strong>Safety first</strong>
-              <span>Deterministic red flags</span>
-            </div>
+        <div className="hero-visual">
+          <div className="hero-image-frame">
+            {/* The bundled artwork must stay directly addressable in the Workers runtime. */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/anatomy-editorial.png"
+              alt="A calm educational skin cutaway showing the surface, dermis, fat, a hair follicle, and a superficial lump"
+              width={1536}
+              height={1024}
+              fetchPriority="high"
+            />
+            <span className="hero-image-caption">Skin surface &rarr; deeper tissue</span>
+            <span className="hand-note hero-note">depth changes the story</span>
+            <span className="annotation-arrow" aria-hidden="true">&#8599;</span>
           </div>
         </div>
 
-        <div className="hero-visual" aria-hidden="true">
-          <div className="hero-halo hero-halo-one" />
-          <div className="hero-halo hero-halo-two" />
-          <div className="hero-anatomy-card">
-            <div className="hero-plate-head">
-              <span>Tissue section / 01</span>
-              <strong>Surface &rarr; fascia</strong>
-            </div>
-            <div className="hero-cross-section">
-              <div className="skin-layer skin-epidermis" />
-              <div className="skin-layer skin-dermis">
-                <span className="follicle-demo" />
-                <span className="follicle-demo second" />
-              </div>
-              <div className="skin-layer skin-fat">
-                {Array.from({ length: 13 }).map((_, index) => (
-                  <i key={index} />
-                ))}
-              </div>
-            </div>
-            <div className="floating-label label-surface">Skin surface</div>
-            <div className="floating-label label-follicle">Hair follicle</div>
-            <div className="floating-label label-depth">Depth matters</div>
-            <div className="hero-plate-foot">
-              <span>Location</span><i />
-              <span>Depth</span><i />
-              <span>Pattern</span>
-            </div>
-          </div>
+        <nav className="quick-start" aria-label="Three ways to get started">
+          <a href="#guide" onClick={() => setGuideOpen(true)}>
+            <span className="quick-start-number">01</span>
+            <MessageSquareText aria-hidden="true" />
+            <span>
+              <strong>Describe in your own words</strong>
+              <small>Use everyday English, Urdu, or Roman Urdu.</small>
+            </span>
+            <ArrowRight aria-hidden="true" />
+          </a>
+          <a href="#atlas">
+            <span className="quick-start-number">02</span>
+            <LocateFixed aria-hidden="true" />
+            <span>
+              <strong>Explore the 3D body</strong>
+              <small>Choose a location, then move beneath the skin.</small>
+            </span>
+            <ArrowRight aria-hidden="true" />
+          </a>
+          <a href="#compare">
+            <span className="quick-start-number">03</span>
+            <Layers3 aria-hidden="true" />
+            <span>
+              <strong>Compare beneath the skin</strong>
+              <small>See how common patterns differ in structure.</small>
+            </span>
+            <ArrowRight aria-hidden="true" />
+          </a>
+        </nav>
+
+        <div className="hero-proof" aria-label="Product principles">
+          <div><strong>Private by design</strong><span>No account or saved history</span></div>
+          <div><strong>3 languages</strong><span>English, Urdu, Roman Urdu</span></div>
+          <div><strong>14 curated lessons</strong><span>Body to beneath the skin</span></div>
+          <div><strong>Safety rules first</strong><span>Educational, never diagnostic</span></div>
         </div>
       </section>
 
@@ -546,6 +611,12 @@ export default function LumpMapApp() {
                   type="button"
                   className={sceneMode === "cutaway" ? "active" : undefined}
                   aria-pressed={sceneMode === "cutaway"}
+                  disabled={regionConditions.length === 0}
+                  title={
+                    regionConditions.length === 0
+                      ? "No superficial cutaway lesson is available for this location"
+                      : undefined
+                  }
                   onClick={() => setSceneMode("cutaway")}
                 >
                   Cutaway
@@ -584,6 +655,7 @@ export default function LumpMapApp() {
                     <SkinCutaway
                       condition={sceneFor(condition)}
                       stage={stage}
+                      stageLabels={condition.scene3d.stageLabels}
                       showLabels={showLabels}
                       reducedMotion={reducedMotion}
                       resetKey={resetKey}
@@ -613,9 +685,16 @@ export default function LumpMapApp() {
                 <button
                   type="button"
                   className={reducedMotion ? "stage-tool active" : "stage-tool"}
-                  aria-label={reducedMotion ? "Enable motion" : "Reduce motion"}
+                  aria-label={
+                    systemReducedMotion
+                      ? "Motion reduced by device preference"
+                      : manualReducedMotion
+                        ? "Use device motion preference"
+                        : "Reduce motion"
+                  }
                   aria-pressed={reducedMotion}
-                  onClick={() => setReducedMotion((value) => !value)}
+                  disabled={systemReducedMotion}
+                  onClick={() => setManualReducedMotion((value) => !value)}
                 >
                   <Activity /> <span>Motion</span>
                 </button>
@@ -735,20 +814,88 @@ export default function LumpMapApp() {
         onExploreCondition={(id, region) => openConditionInAtlas(id, region)}
       />
 
-      <section id="sources" className="source-section section-shell">
-        <div className="source-card">
-          <div className="source-icon" aria-hidden="true">
-            <BookOpen />
-          </div>
+      <section id="library" className="library-section section-shell">
+        <div className="section-heading library-heading">
           <div>
-            <p className="eyebrow">A focused atlas</p>
-            <h2>Clear scope. Visible sources.</h2>
-            <p>{ATLAS_SCOPE_NOTE}</p>
+            <p className="eyebrow">Condition library</p>
+            <h2>Learn the pattern, not a label.</h2>
           </div>
-          <div className="source-meta">
-            <span>Content last reviewed</span>
-            <strong>{MEDICAL_CONTENT_LAST_REVIEWED}</strong>
-            <span>{CONDITIONS.length} curated records</span>
+          <p>
+            Browse every curated lesson in the superficial-skin atlas. Each one
+            explains where a pattern begins, what may help, and what not to do.
+          </p>
+        </div>
+
+        <div className="library-toolbar">
+          <label className="search-field library-search">
+            <Search aria-hidden="true" />
+            <span className="sr-only">Search condition library</span>
+            <input
+              type="search"
+              value={conditionSearch}
+              onChange={(event) => setConditionSearch(event.target.value)}
+              placeholder="Search a condition, everyday name, or body area"
+            />
+          </label>
+          <span className="library-count" aria-live="polite">
+            {filteredConditions.length} of {CONDITIONS.length} lessons
+          </span>
+        </div>
+
+        <div className="condition-library">
+          {filteredConditions.map((item) => (
+            <article key={item.id} className="library-row">
+              <span className="library-index" aria-hidden="true">
+                {String(CONDITIONS.indexOf(item) + 1).padStart(2, "0")}
+              </span>
+              <div className="library-copy">
+                <span className={item.isActuallyACyst ? "library-type cyst" : "library-type"}>
+                  {item.isActuallyACyst ? "Cyst family" : "Often mistaken for a cyst"}
+                </span>
+                <h3>{item.name}</h3>
+                <p>{item.oneLineDefinition}</p>
+                <small>{item.tissueOrigin}</small>
+              </div>
+              <button type="button" onClick={() => openConditionInAtlas(item.id)}>
+                Open 3D lesson <ArrowRight />
+              </button>
+            </article>
+          ))}
+          {filteredConditions.length === 0 && (
+            <div className="library-empty" role="status">
+              <strong>No lessons found</strong>
+              <p>Try a broader term or return to the complete condition library.</p>
+              <button type="button" onClick={() => setConditionSearch("")}>Clear search</button>
+            </div>
+          )}
+        </div>
+      </section>
+
+      <section id="sources" className="source-section section-shell">
+        <div className="source-layout">
+          <div className="source-intro">
+            <div className="source-icon" aria-hidden="true"><BookOpen /></div>
+            <p className="eyebrow">Evidence &amp; scope</p>
+            <h2>Clear scope.<br /><span>Visible sources.</span></h2>
+            <p>{ATLAS_SCOPE_NOTE}</p>
+            <div className="source-meta">
+              <span>Content last reviewed</span>
+              <strong>{MEDICAL_CONTENT_LAST_REVIEWED}</strong>
+              <span>{CONDITIONS.length} curated records &bull; {sourceDirectory.length} source pages</span>
+            </div>
+            <p className="hand-note source-note">always pair learning with clinical care</p>
+          </div>
+          <div className="source-directory" aria-label="Medical source directory">
+            {sourceDirectory.map((source, index) => (
+              <a key={source.url} href={source.url} target="_blank" rel="noreferrer">
+                <span>{String(index + 1).padStart(2, "0")}</span>
+                <span>
+                  <strong>{source.domain}</strong>
+                  <small>{source.names.join("; ")}</small>
+                </span>
+                <ArrowRight aria-hidden="true" />
+              </a>
+            ))}
           </div>
         </div>
       </section>
@@ -765,9 +912,10 @@ export default function LumpMapApp() {
             <button
               type="button"
               aria-pressed={reducedMotion}
-              onClick={() => setReducedMotion((value) => !value)}
+              disabled={systemReducedMotion}
+              onClick={() => setManualReducedMotion((value) => !value)}
             >
-              <Activity /> {reducedMotion ? "Motion reduced" : "Reduce motion"}
+              <Activity /> {systemReducedMotion ? "Reduced by device" : manualReducedMotion ? "Motion reduced" : "Reduce motion"}
             </button>
             <button
               type="button"
@@ -878,6 +1026,15 @@ function RegionInsight({
           </button>
         ))}
       </div>
+      {conditions.length === 0 && (
+        <div className="region-no-lesson">
+          <Info />
+          <p>
+            This location is outside the superficial cutaway atlas. Use the
+            guided questions for safety-focused next steps.
+          </p>
+        </div>
+      )}
       <p className="panel-disclaimer">
         <Info /> These are learning comparisons, not matches or diagnoses.
       </p>
@@ -902,6 +1059,20 @@ function ConditionInsight({
         : tab === "reduce"
           ? condition.riskReduction
           : condition.sourceUrls;
+  const supportingList =
+    tab === "pattern"
+      ? condition.importantDistinctions
+      : tab === "care"
+        ? condition.urgencyNotes
+        : tab === "reduce"
+          ? condition.possibleRiskFactors
+          : [];
+  const supportingLabel =
+    tab === "pattern"
+      ? "Important distinctions"
+      : tab === "care"
+        ? "When the timing changes"
+        : "Factors linked with this pattern";
 
   return (
     <div className="condition-insight-content">
@@ -923,7 +1094,7 @@ function ConditionInsight({
       </div>
 
       <ul className="detail-list">
-        {list.slice(0, 4).map((item, index) => (
+        {list.map((item, index) => (
           <li key={item}>
             <span><Check /></span>
             {tab === "sources" ? (
@@ -935,11 +1106,22 @@ function ConditionInsight({
         ))}
       </ul>
 
+      {supportingList.length > 0 && (
+        <div className="detail-callout">
+          <strong>{supportingLabel}</strong>
+          <ul>
+            {supportingList.map((item) => <li key={item}>{item}</li>)}
+          </ul>
+        </div>
+      )}
+
       <div className="do-not-card">
         <CircleAlert />
         <div>
           <strong>Do not do this</strong>
-          <p>{condition.doNot[0]}</p>
+          <ul>
+            {condition.doNot.map((item) => <li key={item}>{item}</li>)}
+          </ul>
         </div>
       </div>
 
@@ -974,7 +1156,11 @@ function ComparisonPicker({
   onChange: (ids: ConditionId[]) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const available = CONDITIONS.filter((condition) => !selected.includes(condition.id));
+  const [replaceIndex, setReplaceIndex] = useState(2);
+  const available = CONDITIONS.filter(
+    (condition) =>
+      condition.id === selected[replaceIndex] || !selected.includes(condition.id),
+  );
   const triggerRef = useRef<HTMLButtonElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
   const popoverId = useId();
@@ -1023,7 +1209,7 @@ function ComparisonPicker({
         aria-haspopup="dialog"
       >
         <Plus />
-        <span>Swap a comparison</span>
+        <span>Change a comparison</span>
       </button>
       <AnimatePresence>
         {open && (
@@ -1032,18 +1218,38 @@ function ComparisonPicker({
             id={popoverId}
             className="compare-popover"
             role="dialog"
-            aria-label={`Replace ${CONDITION_BY_ID[selected[2]].name}`}
+            aria-label={`Replace ${CONDITION_BY_ID[selected[replaceIndex]].name}`}
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 8 }}
           >
-            <strong>Replace {CONDITION_BY_ID[selected[2]].name}</strong>
+            <strong>Choose the comparison to change</strong>
+            <div className="compare-slot-picker" role="group" aria-label="Comparison slot">
+              {selected.map((id, index) => (
+                <button
+                  type="button"
+                  key={id}
+                  className={replaceIndex === index ? "active" : undefined}
+                  aria-pressed={replaceIndex === index}
+                  onClick={() => setReplaceIndex(index)}
+                >
+                  <span>0{index + 1}</span>
+                  {CONDITION_BY_ID[id].name}
+                </button>
+              ))}
+            </div>
+            <span className="compare-popover-label">
+              Replace {CONDITION_BY_ID[selected[replaceIndex]].name} with
+            </span>
             {available.map((condition) => (
               <button
                 type="button"
                 key={condition.id}
+                disabled={condition.id === selected[replaceIndex]}
                 onClick={() => {
-                  onChange([selected[0], selected[1], condition.id]);
+                  const next = [...selected];
+                  next[replaceIndex] = condition.id;
+                  onChange(next);
                   setOpen(false);
                   window.requestAnimationFrame(() => triggerRef.current?.focus());
                 }}
@@ -1384,6 +1590,11 @@ function GuideSection({
                 <p>{displayedTriageGuidance}</p>
                 {!needsMoreInformation && triage?.triggeredBy[0] && (
                   <strong>Why this appeared: {triage.triggeredBy.join(" ")}</strong>
+                )}
+                {!needsMoreInformation && triage?.emergencyContextLine && (
+                  <div className="emergency-context-line">
+                    <CircleAlert /> {triage.emergencyContextLine}
+                  </div>
                 )}
               </div>
 

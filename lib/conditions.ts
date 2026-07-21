@@ -299,7 +299,7 @@ export const CONDITIONS: ConditionRecord[] = [
     lastReviewed: reviewed,
     scene3d: {
       template: "abscess",
-      stageLabels: ["Normal follicle", "Deep follicle infection", "Boil or connected boils"],
+      stageLabels: ["Normal follicle", "Deep follicle infection", "Boil or connected carbuncle"],
       accentColor: "#f0a66f",
     },
   },
@@ -644,7 +644,7 @@ export const CONDITIONS: ConditionRecord[] = [
     lastReviewed: reviewed,
     scene3d: {
       template: "acne",
-      stageLabels: ["Open follicle", "Blocked follicle", "Deep inflammation"],
+      stageLabels: ["Open follicle", "Blocked follicle", "Solid acne nodule shown"],
       accentColor: "#cf8fa2",
     },
   },
@@ -736,7 +736,7 @@ export const CONDITIONS: ConditionRecord[] = [
     lastReviewed: reviewed,
     scene3d: {
       template: "lymph_node",
-      stageLabels: ["Normal node", "Reactive enlargement", "Persistent swelling"],
+      stageLabels: ["Normal node", "Reactive enlargement", "Still enlarged over time"],
       accentColor: "#99bcae",
     },
   },
@@ -808,4 +808,3 @@ export function findCondition(idOrAlias: string): ConditionRecord | undefined {
       ),
   );
 }
-

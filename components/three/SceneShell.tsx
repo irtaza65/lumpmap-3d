@@ -21,7 +21,7 @@ const SHELL_STYLE = {
   overflow: "hidden",
   borderRadius: "inherit",
   background:
-    "radial-gradient(circle at 50% 38%, rgba(151, 164, 162, 0.08), transparent 36%), #090f12",
+    "radial-gradient(circle at 50% 34%, rgba(255,255,255,.9), rgba(255,249,238,.46) 38%, transparent 68%), linear-gradient(145deg, #fff9ee 0%, #f6f0e5 100%)",
 } as const;
 
 export function useWebGLSupport(): boolean | null {
@@ -99,7 +99,7 @@ export function SceneFallback({
         display: "grid",
         placeItems: "center",
         padding: 28,
-        color: "#dfddd6",
+        color: "#082a66",
         fontFamily: "var(--font-body), sans-serif",
         textAlign: "center",
       }}
@@ -112,7 +112,7 @@ export function SceneFallback({
             height: 126,
             margin: "0 auto 22px",
             position: "relative",
-            filter: "drop-shadow(0 18px 28px rgba(0,0,0,.28))",
+            filter: "drop-shadow(0 18px 28px rgba(8,42,102,.16))",
           }}
         >
           {kind === "body" ? (
@@ -125,8 +125,8 @@ export function SceneFallback({
                   position: "absolute",
                   left: 46,
                   top: 2,
-                  background: "#83c8bd",
-                  opacity: 0.82,
+                  background: "#0e3b88",
+                  opacity: 0.94,
                 }}
               />
               <div
@@ -137,9 +137,9 @@ export function SceneFallback({
                   position: "absolute",
                   left: 32,
                   top: 38,
-                  border: "1px solid rgba(169,232,220,.8)",
+                  border: "1px solid rgba(20,61,119,.22)",
                   background:
-                    "linear-gradient(135deg, rgba(121,215,202,.35), rgba(121,215,202,.08))",
+                    "linear-gradient(135deg, #0e3b88, #061f4c)",
                 }}
               />
               <div
@@ -150,14 +150,14 @@ export function SceneFallback({
                   position: "absolute",
                   left: 82,
                   top: 76,
-                  background: "#f0b875",
-                  boxShadow: "0 0 0 7px rgba(240,184,117,.13)",
+                  background: "#f57a00",
+                  boxShadow: "0 0 0 7px rgba(245,122,0,.15)",
                 }}
               />
             </>
           ) : (
             <>
-              {["#d9b198", "#c98f88", "#e2bd6d", "#8b5c58"].map(
+              {["#e9b391", "#d98f87", "#efc96f", "#a95f5c"].map(
                 (color, index) => (
                   <div
                     key={color}
@@ -169,7 +169,7 @@ export function SceneFallback({
                       borderRadius: index === 0 ? "12px 12px 3px 3px" : 3,
                       position: "absolute",
                       background: color,
-                      boxShadow: "inset 0 0 0 1px rgba(255,255,255,.12)",
+                      boxShadow: "inset 0 0 0 1px rgba(67,45,39,.1)",
                     }}
                   />
                 ),
@@ -182,8 +182,8 @@ export function SceneFallback({
                   position: "absolute",
                   left: 51,
                   top: 47,
-                  background: "rgba(237,126,105,.68)",
-                  border: "2px solid rgba(255,207,174,.65)",
+                  background: "rgba(232,125,87,.74)",
+                  border: "2px solid rgba(244,178,124,.9)",
                 }}
               />
             </>
@@ -193,8 +193,8 @@ export function SceneFallback({
           style={{
             fontFamily: "var(--font-display), sans-serif",
             fontSize: 20,
-            fontWeight: 500,
-            letterSpacing: ".06em",
+            fontWeight: 600,
+            letterSpacing: ".045em",
             textTransform: "uppercase",
           }}
         >
@@ -203,7 +203,7 @@ export function SceneFallback({
         <div
           style={{
             marginTop: 7,
-            color: "#8d9795",
+            color: "#5e6f82",
             fontSize: 13,
             lineHeight: 1.55,
           }}
@@ -226,7 +226,7 @@ function LoadingScene() {
         placeItems: "center",
         pointerEvents: "none",
         zIndex: 2,
-        color: "#788482",
+        color: "#486786",
         fontFamily: "var(--font-display), sans-serif",
         fontSize: 12,
         letterSpacing: "0.14em",

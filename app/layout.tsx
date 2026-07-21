@@ -1,5 +1,10 @@
 import type { Metadata, Viewport } from "next";
-import { Barlow_Condensed, IBM_Plex_Sans } from "next/font/google";
+import {
+  Barlow_Condensed,
+  Caveat,
+  IBM_Plex_Sans,
+  Noto_Naskh_Arabic,
+} from "next/font/google";
 import { headers } from "next/headers";
 
 import "./globals.css";
@@ -14,6 +19,18 @@ const displayFont = Barlow_Condensed({
   variable: "--font-display",
   subsets: ["latin"],
   weight: ["400", "500", "600", "700"],
+});
+
+const handFont = Caveat({
+  variable: "--font-hand",
+  subsets: ["latin"],
+  weight: ["500", "600"],
+});
+
+const urduFont = Noto_Naskh_Arabic({
+  variable: "--font-urdu",
+  subsets: ["arabic"],
+  weight: ["400", "600"],
 });
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -58,9 +75,9 @@ export async function generateMetadata(): Promise<Metadata> {
       images: [
         {
           url: "/og.png",
-          width: 1792,
-          height: 917,
-          alt: "LumpMap 3D skin cutaway with the message: Not every lump is a cyst.",
+          width: 1731,
+          height: 909,
+          alt: "A calm educational skin cutaway showing a superficial lump beside a hair follicle.",
         },
       ],
     },
@@ -77,8 +94,8 @@ export async function generateMetadata(): Promise<Metadata> {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  themeColor: "#071015",
-  colorScheme: "dark",
+  themeColor: "#f6f0e5",
+  colorScheme: "light",
 };
 
 export default function RootLayout({
@@ -87,7 +104,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${bodyFont.variable} ${displayFont.variable}`}>
+    <html
+      lang="en"
+      className={`${bodyFont.variable} ${displayFont.variable} ${handFont.variable} ${urduFont.variable}`}
+    >
       <body>{children}</body>
     </html>
   );
