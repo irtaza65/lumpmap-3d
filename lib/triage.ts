@@ -464,8 +464,8 @@ export function evaluateTriage(input: TriageInput): TriageResult {
   }
 
   if (
-    (input.nearEyeOrCentralFace === true ||
-      (input.bodyRegion === "scalp_face" && input.pain === "severe")) &&
+    input.bodyRegion === "scalp_face" &&
+    (input.nearEyeOrCentralFace === true || input.pain === "severe") &&
     (hasPain(input) || input.swelling === true)
   ) {
     addTrigger(

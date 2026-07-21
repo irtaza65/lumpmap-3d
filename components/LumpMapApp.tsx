@@ -28,7 +28,7 @@ import {
   Sparkles,
   X,
 } from "lucide-react";
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence, MotionConfig, motion } from "motion/react";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 
 import {
@@ -47,9 +47,12 @@ import {
   type RegionRecord,
 } from "@/lib/regions";
 import { evaluateTriage } from "@/lib/triage";
-import { matchConditions } from "@/lib/matchConditions";
+import { getMatchContext, matchConditions } from "@/lib/matchConditions";
 import { buildVisitNote } from "@/lib/visitNote";
-import type { LumpDescription } from "@/lib/openai/schema";
+import {
+  LumpDescriptionSchema,
+  type LumpDescription,
+} from "@/lib/openai/schema";
 import type {
   BodyRegionId,
   CutawaySceneId,
@@ -135,7 +138,7 @@ function scrollToId(id: string) {
   const target = document.getElementById(id);
   if (!target) return;
   window.history.pushState(null, "", `#${id}`);
-  target.scrollIntoView({ behavior: "smooth", block: "start" });
+  target.scrollIntoView({ behavior: "auto", block: "start" });
 }
 
 export default function LumpMapApp() {
@@ -151,6 +154,7 @@ export default function LumpMapApp() {
   const [reducedMotion, setReducedMotion] = useState(false);
   const [resetKey, setResetKey] = useState(0);
   const [regionSearch, setRegionSearch] = useState("");
+  const [showAllRegions, setShowAllRegions] = useState(false);
   const [detailTab, setDetailTab] = useState<
     "pattern" | "care" | "reduce" | "sources"
   >("pattern");
@@ -159,7 +163,11 @@ export default function LumpMapApp() {
   const [guideOpen, setGuideOpen] = useState(false);
   const [guideResetKey, setGuideResetKey] = useState(0);
   const [copied, setCopied] = useState(false);
+  const [copyFailed, setCopyFailed] = useState(false);
   const atlasHeadingRef = useRef<HTMLHeadingElement>(null);
+  const mobileMenuButtonRef = useRef<HTMLButtonElement>(null);
+  const mobileNavRef = useRef<HTMLElement>(null);
+  const mobileMenuId = useId();
 
   const selectedRegionRecord = getRegionRecord(selectedRegion);
   const condition = CONDITION_BY_ID[selectedCondition];
@@ -169,16 +177,19 @@ export default function LumpMapApp() {
 
   const filteredRegions = useMemo(() => {
     const normalized = regionSearch.trim().toLowerCase();
+    const allRegions = REGIONS.filter((region) => region.id !== "unknown");
     if (!normalized) {
-      return FEATURED_REGIONS.map((id) => REGION_BY_ID[id]);
+      return showAllRegions
+        ? allRegions
+        : FEATURED_REGIONS.map((id) => REGION_BY_ID[id]);
     }
-    return REGIONS.filter((region) =>
+    return allRegions.filter((region) =>
       [region.label, region.shortLabel, ...region.searchTerms]
         .join(" ")
         .toLowerCase()
         .includes(normalized),
-    ).slice(0, 9);
-  }, [regionSearch]);
+    );
+  }, [regionSearch, showAllRegions]);
 
   useEffect(() => {
     const media = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -190,6 +201,38 @@ export default function LumpMapApp() {
       media.removeEventListener("change", syncPreference);
     };
   }, []);
+
+  useEffect(() => {
+    if (!mobileMenuOpen) return;
+
+    const focusFrame = window.requestAnimationFrame(() => {
+      mobileNavRef.current?.querySelector<HTMLAnchorElement>("a")?.focus();
+    });
+    const closeAndRestoreFocus = () => {
+      setMobileMenuOpen(false);
+      window.requestAnimationFrame(() => mobileMenuButtonRef.current?.focus());
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") closeAndRestoreFocus();
+    };
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target as Node;
+      if (
+        !mobileNavRef.current?.contains(target) &&
+        !mobileMenuButtonRef.current?.contains(target)
+      ) {
+        setMobileMenuOpen(false);
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => {
+      window.cancelAnimationFrame(focusFrame);
+      document.removeEventListener("keydown", handleKeyDown);
+      document.removeEventListener("pointerdown", handlePointerDown);
+    };
+  }, [mobileMenuOpen]);
 
   function selectRegion(regionId: BodyRegionId | AtlasRegionId) {
     const region = getRegionRecord(regionId);
@@ -246,9 +289,16 @@ export default function LumpMapApp() {
     setStage(1);
     setGuideOpen(false);
     setGuideResetKey((key) => key + 1);
+    setRegionSearch("");
+    setShowAllRegions(false);
+    setCompareIds(DEFAULT_COMPARE);
+    setMobileMenuOpen(false);
+    setCopied(false);
+    setCopyFailed(false);
   }
 
   return (
+    <MotionConfig reducedMotion={reducedMotion ? "always" : "never"}>
     <main className={reducedMotion ? "reduce-motion" : undefined}>
       <a className="skip-link" href="#atlas">
         Skip to anatomy explorer
@@ -277,8 +327,10 @@ export default function LumpMapApp() {
           <button
             className="icon-button mobile-menu-button"
             type="button"
+            ref={mobileMenuButtonRef}
             aria-label={mobileMenuOpen ? "Close menu" : "Open menu"}
             aria-expanded={mobileMenuOpen}
+            aria-controls={mobileMenuId}
             onClick={() => setMobileMenuOpen((open) => !open)}
           >
             {mobileMenuOpen ? <X /> : <Menu />}
@@ -288,6 +340,8 @@ export default function LumpMapApp() {
         <AnimatePresence>
           {mobileMenuOpen && (
             <motion.nav
+              id={mobileMenuId}
+              ref={mobileNavRef}
               className="mobile-nav"
               aria-label="Mobile navigation"
               initial={{ opacity: 0, y: -8 }}
@@ -421,7 +475,7 @@ export default function LumpMapApp() {
                 placeholder="Find a region"
               />
             </label>
-            <div className="region-list">
+            <div className="region-list" id="region-list">
               {filteredRegions.map((region, index) => (
                 <button
                   type="button"
@@ -429,6 +483,7 @@ export default function LumpMapApp() {
                   className={
                     selectedRegion === region.id ? "region-button active" : "region-button"
                   }
+                  aria-pressed={selectedRegion === region.id}
                   onClick={() => selectRegion(region.id)}
                 >
                   <span className="region-glyph" aria-hidden="true">
@@ -441,13 +496,28 @@ export default function LumpMapApp() {
                   <ChevronRight aria-hidden="true" />
                 </button>
               ))}
+              {filteredRegions.length === 0 && (
+                <div className="region-empty" role="status">
+                  <strong>No regions found</strong>
+                  <span>Try a broader search or clear it to browse the atlas.</span>
+                  <button type="button" onClick={() => setRegionSearch("")}>
+                    Clear search
+                  </button>
+                </div>
+              )}
             </div>
             <button
               className="all-regions-link"
               type="button"
-              onClick={() => setRegionSearch(" ")}
+              aria-controls="region-list"
+              aria-expanded={showAllRegions}
+              onClick={() => {
+                setRegionSearch("");
+                setShowAllRegions((value) => !value);
+              }}
             >
-              View all regions <Plus />
+              {showAllRegions ? "Show featured regions" : "View all regions"}
+              {showAllRegions ? <X /> : <Plus />}
             </button>
           </aside>
 
@@ -463,10 +533,11 @@ export default function LumpMapApp() {
                     : condition.name.replace(/ —.*/, "")}
                 </strong>
               </div>
-              <div className="segmented-control" aria-label="Anatomy scale">
+              <div className="segmented-control" role="group" aria-label="Anatomy scale">
                 <button
                   type="button"
                   className={sceneMode === "body" ? "active" : undefined}
+                  aria-pressed={sceneMode === "body"}
                   onClick={() => setSceneMode("body")}
                 >
                   Body
@@ -474,6 +545,7 @@ export default function LumpMapApp() {
                 <button
                   type="button"
                   className={sceneMode === "cutaway" ? "active" : undefined}
+                  aria-pressed={sceneMode === "cutaway"}
                   onClick={() => setSceneMode("cutaway")}
                 >
                   Cutaway
@@ -558,10 +630,11 @@ export default function LumpMapApp() {
             </div>
 
             {sceneMode === "body" ? (
-              <div className="view-toggle" aria-label="Body orientation">
+              <div className="view-toggle" role="group" aria-label="Body orientation">
                 <button
                   type="button"
                   className={orientation === "front" ? "active" : undefined}
+                  aria-pressed={orientation === "front"}
                   onClick={() => setOrientation("front")}
                 >
                   Front
@@ -570,6 +643,7 @@ export default function LumpMapApp() {
                 <button
                   type="button"
                   className={orientation === "back" ? "active" : undefined}
+                  aria-pressed={orientation === "back"}
                   onClick={() => setOrientation("back")}
                 >
                   Back
@@ -653,7 +727,10 @@ export default function LumpMapApp() {
         onOpenChange={setGuideOpen}
         onExploreRegion={(region) => {
           selectRegion(region as AtlasRegionId);
-          scrollToId("atlas");
+          window.requestAnimationFrame(() => {
+            scrollToId("atlas");
+            atlasHeadingRef.current?.focus({ preventScroll: true });
+          });
         }}
         onExploreCondition={(id, region) => openConditionInAtlas(id, region)}
       />
@@ -678,7 +755,7 @@ export default function LumpMapApp() {
 
       <footer className="site-footer">
         <div className="footer-main">
-          <a className="brand footer-brand" href="#top">
+          <a className="brand footer-brand" href="#top" aria-label="LumpMap 3D home">
             <span className="brand-wordmark" aria-hidden="true">LUMPMAP <b>3D</b></span>
             <small>Understand what&apos;s beneath the skin.</small>
           </a>
@@ -695,13 +772,23 @@ export default function LumpMapApp() {
             <button
               type="button"
               onClick={async () => {
-                await navigator.clipboard.writeText(window.location.href);
-                setCopied(true);
-                window.setTimeout(() => setCopied(false), 1800);
+                try {
+                  await navigator.clipboard.writeText(window.location.href);
+                  setCopyFailed(false);
+                  setCopied(true);
+                  window.setTimeout(() => setCopied(false), 1800);
+                } catch {
+                  setCopied(false);
+                  setCopyFailed(true);
+                  window.setTimeout(() => setCopyFailed(false), 2400);
+                }
               }}
             >
-              {copied ? <Check /> : <Copy />} {copied ? "Link copied" : "Copy link"}
+              {copied ? <Check /> : <Copy />} {copied ? "Link copied" : copyFailed ? "Copy failed" : "Copy link"}
             </button>
+            <span className="sr-only" role="status" aria-live="polite">
+              {copied ? "Link copied to clipboard." : copyFailed ? "The link could not be copied." : ""}
+            </span>
           </div>
         </div>
         <div className="footer-bottom">
@@ -710,6 +797,7 @@ export default function LumpMapApp() {
         </div>
       </footer>
     </main>
+    </MotionConfig>
   );
 }
 
@@ -835,11 +923,13 @@ function ConditionInsight({
       </div>
 
       <ul className="detail-list">
-        {list.slice(0, 4).map((item) => (
+        {list.slice(0, 4).map((item, index) => (
           <li key={item}>
             <span><Check /></span>
             {tab === "sources" ? (
-              <a href={item} target="_blank" rel="noreferrer">Open medical source</a>
+              <a href={item} target="_blank" rel="noreferrer">
+                Source {index + 1}: {sourceDomain(item)}
+              </a>
             ) : item}
           </li>
         ))}
@@ -885,24 +975,77 @@ function ComparisonPicker({
 }) {
   const [open, setOpen] = useState(false);
   const available = CONDITIONS.filter((condition) => !selected.includes(condition.id));
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const popoverRef = useRef<HTMLDivElement>(null);
+  const popoverId = useId();
+
+  useEffect(() => {
+    if (!open) return;
+
+    const focusFrame = window.requestAnimationFrame(() => {
+      popoverRef.current?.querySelector<HTMLButtonElement>("button")?.focus();
+    });
+    const closeAndRestoreFocus = () => {
+      setOpen(false);
+      window.requestAnimationFrame(() => triggerRef.current?.focus());
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") closeAndRestoreFocus();
+    };
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target as Node;
+      if (
+        !popoverRef.current?.contains(target) &&
+        !triggerRef.current?.contains(target)
+      ) {
+        setOpen(false);
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => {
+      window.cancelAnimationFrame(focusFrame);
+      document.removeEventListener("keydown", handleKeyDown);
+      document.removeEventListener("pointerdown", handlePointerDown);
+    };
+  }, [open]);
 
   return (
-    <div className="compare-picker-wrap">
-      <button className="add-comparison" type="button" onClick={() => setOpen((value) => !value)} aria-expanded={open}>
+    <div className={open ? "compare-picker-wrap open" : "compare-picker-wrap"}>
+      <button
+        ref={triggerRef}
+        className="add-comparison"
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        aria-expanded={open}
+        aria-controls={popoverId}
+        aria-haspopup="dialog"
+      >
         <Plus />
         <span>Swap a comparison</span>
       </button>
       <AnimatePresence>
         {open && (
-          <motion.div className="compare-popover" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 8 }}>
-            <strong>Replace the last card</strong>
-            {available.slice(0, 6).map((condition) => (
+          <motion.div
+            ref={popoverRef}
+            id={popoverId}
+            className="compare-popover"
+            role="dialog"
+            aria-label={`Replace ${CONDITION_BY_ID[selected[2]].name}`}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 8 }}
+          >
+            <strong>Replace {CONDITION_BY_ID[selected[2]].name}</strong>
+            {available.map((condition) => (
               <button
                 type="button"
                 key={condition.id}
                 onClick={() => {
                   onChange([selected[0], selected[1], condition.id]);
                   setOpen(false);
+                  window.requestAnimationFrame(() => triggerRef.current?.focus());
                 }}
               >
                 {condition.name}
@@ -938,12 +1081,17 @@ function GuideSection({
   const [text, setText] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [mode, setMode] = useState<"openai" | "demo" | null>(null);
+  const [mode, setMode] = useState<"openai" | "demo" | "guided" | null>(null);
   const [flowMode, setFlowMode] = useState<"text" | "guided">("text");
   const [description, setDescription] = useState<GuideDescription | null>(null);
   const [visitCopied, setVisitCopied] = useState(false);
+  const [visitCopyFailed, setVisitCopyFailed] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const resultsRef = useRef<HTMLDivElement>(null);
+  const requestIdRef = useRef(0);
+  const requestAbortRef = useRef<AbortController | null>(null);
+  const descriptionInputId = useId();
+  const descriptionErrorId = useId();
 
   useEffect(() => {
     if (open) inputRef.current?.focus();
@@ -952,18 +1100,64 @@ function GuideSection({
   useEffect(() => {
     if (!description) return;
     const frame = window.requestAnimationFrame(() => {
-      resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      resultsRef.current?.scrollIntoView({ behavior: "auto", block: "start" });
       resultsRef.current?.focus({ preventScroll: true });
     });
     return () => window.cancelAnimationFrame(frame);
   }, [description]);
 
+  useEffect(
+    () => () => {
+      requestAbortRef.current?.abort();
+    },
+    [],
+  );
+
+  function cancelPendingRequest() {
+    requestIdRef.current += 1;
+    requestAbortRef.current?.abort();
+    requestAbortRef.current = null;
+    setLoading(false);
+  }
+
+  function focusTextInput() {
+    window.requestAnimationFrame(() => inputRef.current?.focus());
+  }
+
+  function startGuidedFlow() {
+    cancelPendingRequest();
+    setError(null);
+    setDescription(null);
+    setMode(null);
+    setFlowMode("guided");
+    onOpenChange(true);
+  }
+
+  function restartWithText() {
+    cancelPendingRequest();
+    setDescription(null);
+    setText("");
+    setError(null);
+    setMode(null);
+    setFlowMode("text");
+    setVisitCopied(false);
+    setVisitCopyFailed(false);
+    focusTextInput();
+  }
+
   async function understandText() {
     const trimmed = text.trim();
     if (!trimmed) {
       setError("Describe the location and what you have noticed first.");
+      focusTextInput();
       return;
     }
+
+    requestAbortRef.current?.abort();
+    const controller = new AbortController();
+    const requestId = requestIdRef.current + 1;
+    requestIdRef.current = requestId;
+    requestAbortRef.current = controller;
     setLoading(true);
     setError(null);
     try {
@@ -971,22 +1165,43 @@ function GuideSection({
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ text: trimmed }),
+        signal: controller.signal,
       });
-      const payload = (await response.json()) as {
+      const responseText = await response.text();
+      let payload: {
         mode?: "openai" | "demo";
         description?: GuideDescription;
         error?: string;
-      };
-      if (!response.ok || !payload.description) {
-        throw new Error(payload.error ?? "The description could not be read.");
+      } = {};
+      if (responseText) {
+        try {
+          payload = JSON.parse(responseText) as typeof payload;
+        } catch {
+          throw new Error(
+            response.ok
+              ? "The response could not be read. Please try guided questions instead."
+              : "The service is temporarily unavailable. Please try guided questions instead.",
+          );
+        }
       }
+      if (!response.ok || !payload.description) {
+        throw new Error(
+          payload.error ??
+            "The description could not be read. Please try guided questions instead.",
+        );
+      }
+      if (requestId !== requestIdRef.current) return;
       setDescription(payload.description);
       setMode(payload.mode ?? "demo");
       onOpenChange(true);
     } catch (caught) {
+      if (controller.signal.aborted || requestId !== requestIdRef.current) return;
       setError(caught instanceof Error ? caught.message : "Please try again.");
     } finally {
-      setLoading(false);
+      if (requestId === requestIdRef.current) {
+        setLoading(false);
+        requestAbortRef.current = null;
+      }
     }
   }
 
@@ -996,7 +1211,13 @@ function GuideSection({
   );
 
   const triage = description ? evaluateTriage(description) : null;
-  const triageTone = triage
+  const needsMoreInformation = Boolean(
+    triage?.category === "lower_risk_monitoring" &&
+      triage.hasUnknownSafetyInformation,
+  );
+  const triageTone = needsMoreInformation
+    ? "uncertain"
+    : triage
     ? {
         emergency_now: "emergency",
         same_day_urgent: "urgent",
@@ -1004,7 +1225,9 @@ function GuideSection({
         lower_risk_monitoring: "monitor",
       }[triage.category]
     : "monitor";
-  const triageEyebrow = triage
+  const triageEyebrow = needsMoreInformation
+    ? "More information needed"
+    : triage
     ? {
         emergency_now: "Emergency now",
         same_day_urgent: "Same-day urgent assessment",
@@ -1012,10 +1235,23 @@ function GuideSection({
         lower_risk_monitoring: "Lower-risk education",
       }[triage.category]
     : "";
+  const displayedTriageTitle = needsMoreInformation
+    ? "There is not enough detail to assess urgency"
+    : triage?.title;
+  const displayedTriageGuidance = needsMoreInformation
+    ? "A vague description can hide important warning signs. Answer the guided questions before relying on this educational result."
+    : `${triage?.guidance ?? ""} ${triage?.action ?? ""}`.trim();
   const visitNote = description ? buildVisitNote(description) : "";
+  const matchContext = description ? getMatchContext(description) : null;
   const interpretedLanguage = languagePresentation(
     description?.language ?? "english",
   );
+  const interpretationModeLabel =
+    mode === "openai"
+      ? "Language model + safety rules"
+      : mode === "guided"
+        ? "Guided answers + safety rules"
+        : "Local text rules + safety rules";
 
   return (
     <section id="guide" className="guide-section">
@@ -1029,11 +1265,14 @@ function GuideSection({
             are kept as clues—never turned into a diagnosis.
           </p>
           <div className="privacy-promise">
-            <ShieldCheck />
-            <div>
-              <strong>Private by default</strong>
-              <span>Your description is not saved, tracked, or used for an account.</span>
-            </div>
+              <ShieldCheck />
+              <div>
+                <strong>No account or saved history</strong>
+                <span>
+                  The app does not store your description. Language-model mode sends
+                  it to OpenAI for processing; guided questions use local rules.
+                </span>
+              </div>
           </div>
           <div className="guide-steps" aria-label="How the guide works">
             <div><span>1</span><p><strong>Describe</strong>Use ordinary language</p></div>
@@ -1056,10 +1295,14 @@ function GuideSection({
           {!description ? (
             flowMode === "guided" ? (
               <GuidedQuestionFlow
-                onCancel={() => setFlowMode("text")}
+                onCancel={() => {
+                  setError(null);
+                  setFlowMode("text");
+                  focusTextInput();
+                }}
                 onComplete={(guidedDescription) => {
                   setDescription(guidedDescription);
-                  setMode("demo");
+                  setMode("guided");
                   onOpenChange(true);
                 }}
               />
@@ -1069,24 +1312,43 @@ function GuideSection({
                 <div><span>Guided navigator</span><strong>What have you noticed?</strong></div>
                 <span className="demo-mode"><Sparkles /> Demo mode available</span>
               </div>
-              <label className="description-box">
-                <span className="sr-only">Describe your lump</span>
+              <label className="sr-only" htmlFor={descriptionInputId}>
+                Describe your lump
+              </label>
+              <div className="description-box">
                 <textarea
+                  id={descriptionInputId}
                   ref={inputRef}
                   dir="auto"
                   value={text}
                   maxLength={4000}
+                  disabled={loading}
+                  aria-invalid={Boolean(error)}
+                  aria-describedby={error ? descriptionErrorId : undefined}
                   onFocus={() => onOpenChange(true)}
-                  onChange={(event) => setText(event.target.value)}
+                  onChange={(event) => {
+                    setText(event.target.value);
+                    if (error) setError(null);
+                  }}
                   placeholder="For example: Baghal mein baar baar dard wali phinsi hoti hai aur nishan reh jata hai..."
                 />
-                <span className="char-count">{text.length}/4000</span>
-              </label>
-              {error && <p className="form-error" role="alert"><CircleAlert /> {error}</p>}
-              <div className="sample-heading"><span>Try a sample</span><span>One click</span></div>
+                <span className="char-count" aria-hidden="true">{text.length}/4000</span>
+              </div>
+              {error && <p id={descriptionErrorId} className="form-error" role="alert"><CircleAlert /> {error}</p>}
+              <div className="sample-heading"><span>Try a sample</span><span>Fills the description</span></div>
               <div className="sample-list">
                 {DEMO_PROMPTS.map((sample, index) => (
-                  <button type="button" key={sample} onClick={() => { setText(sample); onOpenChange(true); }}>
+                  <button
+                    type="button"
+                    key={sample}
+                    disabled={loading}
+                    onClick={() => {
+                      setText(sample);
+                      setError(null);
+                      onOpenChange(true);
+                      focusTextInput();
+                    }}
+                  >
                     <span>0{index + 1}</span>{sample}<ArrowRight />
                   </button>
                 ))}
@@ -1098,10 +1360,8 @@ function GuideSection({
               <button
                 className="guided-choice"
                 type="button"
-                onClick={() => {
-                  setFlowMode("guided");
-                  onOpenChange(true);
-                }}
+                disabled={loading}
+                onClick={startGuidedFlow}
               >
                 Prefer one question at a time? <span>Use guided questions</span>
                 <ChevronRight />
@@ -1120,15 +1380,35 @@ function GuideSection({
             >
               <div className={`triage-banner ${triageTone}`}>
                 <div><HeartPulse /><span>{triageEyebrow}</span></div>
-                <h3>{triage?.title}</h3>
-                <p>{triage?.guidance} {triage?.action}</p>
-                {triage?.triggeredBy[0] && <strong>Why this appeared: {triage.triggeredBy.join(" ")}</strong>}
+                <h3>{displayedTriageTitle}</h3>
+                <p>{displayedTriageGuidance}</p>
+                {!needsMoreInformation && triage?.triggeredBy[0] && (
+                  <strong>Why this appeared: {triage.triggeredBy.join(" ")}</strong>
+                )}
               </div>
+
+              {needsMoreInformation && (
+                <div className="follow-up-card">
+                  <div>
+                    <CircleAlert />
+                    <strong>Details that would make this safer</strong>
+                  </div>
+                  <ul>
+                    {(description.suggestedFollowUpQuestions.length > 0
+                      ? description.suggestedFollowUpQuestions
+                      : description.unknowns.slice(0, 3)
+                    ).map((item) => <li key={item}>{item}</li>)}
+                  </ul>
+                  <button className="secondary-button" type="button" onClick={startGuidedFlow}>
+                    Answer guided questions <ArrowRight />
+                  </button>
+                </div>
+              )}
 
               <div className="not-diagnosis"><Info /><p><strong>This is not a diagnosis.</strong> These are educational patterns selected from curated local records.</p></div>
 
               <div className="interpretation-card">
-                <div className="result-section-head"><span>Structured interpretation</span><span>{mode === "openai" ? "Language model + safety rules" : "No-key demo rules"}</span></div>
+                <div className="result-section-head"><span>Structured interpretation</span><span>{interpretationModeLabel}</span></div>
                 <p lang={interpretedLanguage.lang} dir={interpretedLanguage.dir}>
                   {description.normalizedPlainLanguage || description.originalText}
                 </p>
@@ -1140,33 +1420,54 @@ function GuideSection({
                 </div>
               </div>
 
-              <div className="result-section-head"><span>Patterns worth learning about</span><span>Up to 3</span></div>
-              <div className="result-condition-list">
-                {likelyCards.map((match) => (
-                  <article key={match.conditionId}>
-                    <span className="condition-dot" style={{ backgroundColor: match.condition.scene3d.accentColor }} />
-                    <div className="result-condition-copy">
-                      <h4>{match.condition.name}</h4>
-                      <p>{match.whyRelevant}</p>
-                      <div className="result-condition-meta">
-                        <span>Reviewed {match.condition.lastReviewed}</span>
-                        {match.condition.sourceUrls.slice(0, 2).map((sourceUrl, index) => (
-                          <a key={sourceUrl} href={sourceUrl} target="_blank" rel="noreferrer">
-                            Source {index + 1}: {sourceDomain(sourceUrl)}
-                          </a>
-                        ))}
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      aria-label={`Explore ${match.condition.name} in the 3D atlas`}
-                      onClick={() => onExploreCondition(match.conditionId, description.bodyRegion)}
-                    >
-                      <span>Explore condition</span><ChevronRight />
-                    </button>
-                  </article>
-                ))}
-              </div>
+              {matchContext?.outsideAtlas ? (
+                <div className="match-scope-note">
+                  <CircleAlert />
+                  <div>
+                    <strong>Outside this superficial-skin atlas</strong>
+                    <p>{matchContext.notice}</p>
+                  </div>
+                </div>
+              ) : likelyCards.length > 0 ? (
+                <>
+                  <div className="result-section-head"><span>Patterns worth learning about</span><span>Up to 3</span></div>
+                  <p className="result-context-note">{matchContext?.notice}</p>
+                  <div className="result-condition-list">
+                    {likelyCards.map((match) => (
+                      <article key={match.conditionId}>
+                        <span className="condition-dot" style={{ backgroundColor: match.condition.scene3d.accentColor }} />
+                        <div className="result-condition-copy">
+                          <h4>{match.condition.name}</h4>
+                          <p>{match.whyRelevant}</p>
+                          <div className="result-condition-meta">
+                            <span>Reviewed {match.condition.lastReviewed}</span>
+                            {match.condition.sourceUrls.slice(0, 2).map((sourceUrl, index) => (
+                              <a key={sourceUrl} href={sourceUrl} target="_blank" rel="noreferrer">
+                                Source {index + 1}: {sourceDomain(sourceUrl)}
+                              </a>
+                            ))}
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          aria-label={`Explore ${match.condition.name} in the 3D atlas`}
+                          onClick={() => onExploreCondition(match.conditionId, description.bodyRegion)}
+                        >
+                          <span>Explore condition</span><ChevronRight />
+                        </button>
+                      </article>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <div className="match-scope-note neutral">
+                  <Info />
+                  <div>
+                    <strong>No useful comparison yet</strong>
+                    <p>Add the location and a few symptom details before comparing superficial patterns.</p>
+                  </div>
+                </div>
+              )}
 
               <div className="safe-next-step">
                 <CircleAlert />
@@ -1176,13 +1477,30 @@ function GuideSection({
               <div className="visit-note">
                 <div className="result-section-head"><span>Visit Note</span><span>Facts you provided only</span></div>
                 <pre>{visitNote}</pre>
-                <button type="button" onClick={async () => { await navigator.clipboard.writeText(visitNote); setVisitCopied(true); window.setTimeout(() => setVisitCopied(false), 1600); }}>
-                  {visitCopied ? <Check /> : <Copy />} {visitCopied ? "Copied" : "Copy Visit Note"}
+                <button
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      await navigator.clipboard.writeText(visitNote);
+                      setVisitCopyFailed(false);
+                      setVisitCopied(true);
+                      window.setTimeout(() => setVisitCopied(false), 1600);
+                    } catch {
+                      setVisitCopied(false);
+                      setVisitCopyFailed(true);
+                      window.setTimeout(() => setVisitCopyFailed(false), 2400);
+                    }
+                  }}
+                >
+                  {visitCopied ? <Check /> : <Copy />} {visitCopied ? "Copied" : visitCopyFailed ? "Copy failed" : "Copy Visit Note"}
                 </button>
+                <span className="sr-only" role="status" aria-live="polite">
+                  {visitCopied ? "Visit note copied to clipboard." : visitCopyFailed ? "The visit note could not be copied." : ""}
+                </span>
               </div>
 
               <div className="result-actions">
-                <button className="secondary-button" type="button" onClick={() => { setDescription(null); setText(""); }}><RotateCcw /> Start again</button>
+                <button className="secondary-button" type="button" onClick={restartWithText}><RotateCcw /> Start again</button>
                 {description.bodyRegion !== "unknown" && <button className="primary-button" type="button" onClick={() => onExploreRegion(description.bodyRegion)}>Explore this area <ArrowRight /></button>}
               </div>
             </div>
@@ -1233,12 +1551,13 @@ function GuidedQuestionFlow({
 }) {
   const [step, setStep] = useState(0);
   const [draft, setDraft] = useState<Partial<LumpDescription>>({});
+  const [flowError, setFlowError] = useState<string | null>(null);
+  const questionRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
-      document
-        .getElementById("guided-flow")
-        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+      questionRef.current?.scrollIntoView({ behavior: "auto", block: "start" });
+      questionRef.current?.focus({ preventScroll: true });
     });
     return () => window.cancelAnimationFrame(frame);
   }, [step]);
@@ -1247,7 +1566,19 @@ function GuidedQuestionFlow({
     key: K,
     value: LumpDescription[K],
   ) {
-    setDraft((current) => ({ ...current, [key]: value }));
+    setFlowError(null);
+    setDraft((current) => {
+      const next: Partial<LumpDescription> = { ...current, [key]: value };
+      if (key === "bodyRegion") {
+        const region = value as LumpDescription["bodyRegion"];
+        if (region !== "scalp_face") next.nearEyeOrCentralFace = null;
+        if (region !== "vulvar_opening") next.age = null;
+        if (region !== "inside_testicle" && region !== "scrotal_skin") {
+          next.suddenOnset = null;
+        }
+      }
+      return next;
+    });
   }
 
   function finish() {
@@ -1257,7 +1588,18 @@ function GuidedQuestionFlow({
     if (!draft.onset || draft.onset === "unknown") unknowns.push("onset");
     if (!draft.pain || draft.pain === "unknown") unknowns.push("pain level");
 
-    onComplete({
+    const suggestedFollowUpQuestions: string[] = [];
+    if (!draft.bodyRegion || draft.bodyRegion === "unknown") {
+      suggestedFollowUpQuestions.push("Where exactly on the body is the lump?");
+    }
+    if (!draft.trend || draft.trend === "unknown") {
+      suggestedFollowUpQuestions.push("Is it improving, stable, or getting worse?");
+    }
+    if (draft.feverOrChills === null || draft.feverOrChills === undefined) {
+      suggestedFollowUpQuestions.push("Do you have fever or chills?");
+    }
+
+    const candidate = {
       language: "english",
       originalText: "",
       normalizedPlainLanguage:
@@ -1296,8 +1638,16 @@ function GuidedQuestionFlow({
       durationDays: draft.durationDays ?? null,
       age: draft.age ?? null,
       unknowns,
-      suggestedFollowUpQuestions: [],
-    });
+      suggestedFollowUpQuestions: suggestedFollowUpQuestions.slice(0, 3),
+    };
+    const parsed = LumpDescriptionSchema.safeParse(candidate);
+    if (!parsed.success) {
+      setFlowError(
+        "One of the numeric answers is outside the supported range. Review the duration or age and try again.",
+      );
+      return;
+    }
+    onComplete(parsed.data);
   }
 
   function next() {
@@ -1342,7 +1692,13 @@ function GuidedQuestionFlow({
         </div>
       )}
 
-      <div className="guided-question">
+      <div
+        ref={questionRef}
+        className="guided-question"
+        tabIndex={-1}
+        role="group"
+        aria-label={`Question ${step + 1} of ${GUIDED_STEP_TITLES.length}: ${GUIDED_STEP_TITLES[step]}`}
+      >
         {step === 0 && (
           <>
             <h3>Where is the lump?</h3>
@@ -1414,13 +1770,16 @@ function GuidedQuestionFlow({
                 min={0}
                 max={36500}
                 value={draft.durationDays ?? ""}
-                onChange={(event) => {
-                  const nextValue = event.currentTarget.value;
-                  setAnswer(
-                    "durationDays",
-                    nextValue === "" ? null : Number(nextValue),
-                  );
-                }}
+                 onChange={(event) => {
+                   const nextValue = event.currentTarget.value;
+                   const parsedValue = Number(nextValue);
+                   setAnswer(
+                     "durationDays",
+                     nextValue === "" || !Number.isFinite(parsedValue)
+                       ? null
+                       : Math.min(36_500, Math.max(0, Math.round(parsedValue))),
+                   );
+                 }}
                 placeholder="For example, 14"
               />
             </label>
@@ -1554,10 +1913,16 @@ function GuidedQuestionFlow({
                   min={0}
                   max={125}
                   value={draft.age ?? ""}
-                  onChange={(event) => {
-                    const nextValue = event.currentTarget.value;
-                    setAnswer("age", nextValue === "" ? null : Number(nextValue));
-                  }}
+                   onChange={(event) => {
+                     const nextValue = event.currentTarget.value;
+                     const parsedValue = Number(nextValue);
+                     setAnswer(
+                       "age",
+                       nextValue === "" || !Number.isFinite(parsedValue)
+                         ? null
+                         : Math.min(125, Math.max(0, Math.round(parsedValue))),
+                     );
+                   }}
                   placeholder="Age in years"
                 />
               </label>
@@ -1565,6 +1930,8 @@ function GuidedQuestionFlow({
           </>
         )}
       </div>
+
+      {flowError && <p className="form-error" role="alert"><CircleAlert /> {flowError}</p>}
 
       <div className="guided-actions">
         <button

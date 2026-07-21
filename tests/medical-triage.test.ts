@@ -165,6 +165,42 @@ describe("other deterministic care levels", () => {
     expect(result.category).toBe("same_day_urgent");
   });
 
+  it("ignores a stale near-eye answer after the body region changes away from the face", () => {
+    const result = evaluateTriage(
+      answers({
+        bodyRegion: "armpit",
+        nearEyeOrCentralFace: true,
+        swelling: true,
+      }),
+    );
+
+    expect(result.category).toBe("lower_risk_monitoring");
+    expect(result.triggers.map((trigger) => trigger.ruleId)).not.toContain(
+      "painful_eye_or_central_face_swelling",
+    );
+    expect(result.triggeredBy).not.toContain(
+      "Near the eye or central face: yes",
+    );
+  });
+
+  it("still routes painful swelling near the eye or central face to same-day care", () => {
+    const result = evaluateTriage(
+      answers({
+        bodyRegion: "scalp_face",
+        nearEyeOrCentralFace: true,
+        swelling: true,
+      }),
+    );
+
+    expect(result.category).toBe("same_day_urgent");
+    expect(result.triggers.map((trigger) => trigger.ruleId)).toContain(
+      "painful_eye_or_central_face_swelling",
+    );
+    expect(result.triggeredBy).toContain(
+      "Near the eye or central face: yes",
+    );
+  });
+
   it("routes a new Bartholin-area lump at age 40 or older to a prompt appointment", () => {
     const result = evaluateTriage(
       answers({

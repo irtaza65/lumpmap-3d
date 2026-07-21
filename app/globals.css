@@ -17,6 +17,7 @@
   --coral: #ca6b5d;
   --amber: #d29a55;
   --lavender: #a897bd;
+  --warm-white: #e4e1d9;
   --radius-sm: 2px;
   --radius-md: 3px;
   --radius-lg: 4px;
@@ -706,8 +707,8 @@ textarea:focus-visible {
   outline: 0;
 }
 
-.atlas-heading h2:focus {
-  outline: 2px solid var(--mint-bright);
+.atlas-heading h2:focus-visible {
+  outline: 1px solid rgba(118, 198, 200, .62);
   outline-offset: 5px;
 }
 
@@ -2206,8 +2207,8 @@ textarea:focus-visible {
   gap: 14px;
 }
 
-.guide-results:focus {
-  outline: 2px solid var(--mint-bright);
+.guide-results:focus-visible {
+  outline: 1px solid rgba(118, 198, 200, .58);
   outline-offset: 6px;
 }
 
@@ -2652,7 +2653,7 @@ textarea:focus-visible {
   .region-insight-content,
   .condition-insight-content { max-width: 740px; }
   .condition-list { display: grid; grid-template-columns: 1fr 1fr; }
-  .canvas-wrap { inset-bottom: 120px; }
+  .canvas-wrap { inset: 0 0 120px; }
 
   .guide-shell { grid-template-columns: 1fr; }
   .guide-copy { position: static; max-width: 720px; }
@@ -3277,6 +3278,11 @@ textarea:focus-visible {
 
 .region-list {
   gap: 2px;
+  max-height: 610px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-color: rgba(85, 175, 178, .35) transparent;
+  scrollbar-gutter: stable;
 }
 
 .region-button {
@@ -3610,7 +3616,104 @@ textarea:focus-visible {
 }
 
 .compare-popover {
+  inset: 0;
+  left: auto;
+  width: min(300px, calc(100vw - 32px));
+  height: 100%;
   background: #111b20;
+  max-height: min(420px, calc(100svh - 120px));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.compare-picker-wrap.open {
+  min-height: 420px;
+}
+
+.description-box textarea:disabled,
+.sample-list button:disabled,
+.guided-choice:disabled {
+  opacity: .52;
+  cursor: wait;
+}
+
+.triage-banner.uncertain {
+  border-color: rgba(232, 174, 103, .36);
+  background:
+    linear-gradient(90deg, rgba(232, 174, 103, .09), transparent 72%),
+    #0c1518;
+}
+
+.triage-banner.uncertain > div:first-child {
+  color: var(--amber);
+}
+
+.follow-up-card,
+.match-scope-note {
+  padding: 18px;
+  border: 1px solid rgba(232, 174, 103, .24);
+  background: rgba(232, 174, 103, .055);
+}
+
+.follow-up-card > div,
+.match-scope-note {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  align-items: start;
+  gap: 10px;
+}
+
+.follow-up-card svg,
+.match-scope-note > svg {
+  width: 18px;
+  color: var(--amber);
+}
+
+.follow-up-card strong,
+.match-scope-note strong {
+  color: #d7d4cb;
+  font-size: 14px;
+  font-weight: 580;
+}
+
+.follow-up-card ul {
+  display: grid;
+  gap: 7px;
+  margin: 13px 0 16px 34px;
+  padding-left: 16px;
+  color: #a9b1ad;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.follow-up-card .secondary-button {
+  width: fit-content;
+  min-height: 44px;
+  margin-left: 34px;
+}
+
+.match-scope-note p {
+  margin: 5px 0 0;
+  color: #a5afab;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.match-scope-note.neutral {
+  border-color: rgba(85, 175, 178, .24);
+  background: rgba(85, 175, 178, .055);
+}
+
+.match-scope-note.neutral > svg {
+  color: var(--mint);
+}
+
+.result-context-note {
+  margin: -5px 0 2px;
+  color: #899895;
+  font-size: 12px;
+  line-height: 1.55;
 }
 
 .guide-section {
@@ -3729,6 +3832,202 @@ textarea:focus-visible {
   text-transform: uppercase;
 }
 
+/* Keep educational and form copy comfortably legible without weakening the
+   condensed atlas labels used for navigation and metadata. */
+.search-field input {
+  font-size: 14px;
+}
+
+.search-field input::placeholder,
+.description-box textarea::placeholder {
+  color: #82918e;
+}
+
+.panel-intro {
+  color: #abb4b1;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.location-note p,
+.detail-list li,
+.do-not-card p,
+.panel-disclaimer {
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.detail-list li {
+  color: #aeb8b4;
+}
+
+.do-not-card strong {
+  font-size: 12px;
+}
+
+.do-not-card p {
+  color: #bd948c;
+}
+
+.panel-disclaimer {
+  color: #849590;
+}
+
+.condition-list strong {
+  font-size: 13px;
+}
+
+.condition-list small {
+  color: #849590;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.description-box textarea {
+  font-size: 15px;
+}
+
+.char-count,
+.sample-heading span:last-child,
+.result-section-head span:last-child {
+  color: #82918e;
+  font-size: 11px;
+}
+
+.form-error,
+.sample-heading span:first-child,
+.guided-choice,
+.guided-close {
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.sample-list button {
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.answer-summary button {
+  color: #93a29e;
+  font-size: 11px;
+}
+
+.guided-question {
+  scroll-margin-top: 92px;
+}
+
+.guided-question:focus-visible {
+  outline: 1px solid rgba(118, 198, 200, .58);
+  outline-offset: 6px;
+}
+
+.guided-question > p {
+  color: #9aa8a4;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.option-grid > button {
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.option-fieldset legend,
+.guided-number-field small {
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.tri-state-row strong {
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.tri-state-row span {
+  color: #849590;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.tri-state-options label {
+  color: #899b96;
+  font-size: 12px;
+}
+
+.triage-banner > div:first-child,
+.triage-banner > strong {
+  font-size: 12px;
+}
+
+.triage-banner p {
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.not-diagnosis p,
+.safe-next-step p,
+.result-condition-list p,
+.visit-note pre {
+  color: #909f9a;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.not-diagnosis strong,
+.safe-next-step strong,
+.result-condition-list h4 {
+  font-size: 13px;
+}
+
+.interpretation-card > p {
+  font-size: 14px;
+  line-height: 1.65;
+}
+
+.fact-chips span,
+.result-condition-meta > span {
+  font-size: 11px;
+}
+
+.result-condition-meta a,
+.result-condition-list button,
+.visit-note > button {
+  font-size: 12px;
+}
+
+.region-list:has(.region-empty),
+.region-list:has(.region-empty-state) {
+  display: block;
+  overflow: visible;
+}
+
+.region-empty,
+.region-empty-state {
+  width: 100%;
+  min-height: 112px;
+  display: grid;
+  place-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  padding: 18px 14px;
+  border: 1px dashed var(--line-strong);
+  background: #091014;
+  color: #9ca8a5;
+  font-size: 13px;
+  line-height: 1.5;
+  text-align: center;
+}
+
+.region-empty button,
+.region-empty-state button {
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid var(--line-strong);
+  background: #101e23;
+  color: var(--paper);
+  cursor: pointer;
+}
+
 @media (max-width: 1220px) {
   .site-header {
     grid-template-columns: 1fr auto;
@@ -3769,6 +4068,21 @@ textarea:focus-visible {
 
   .guide-section {
     background: #0a1115;
+  }
+}
+
+@media (min-width: 761px) and (max-width: 1020px) {
+  .atlas-workspace {
+    min-height: 0;
+    grid-template-rows: minmax(600px, auto) auto;
+  }
+
+  .anatomy-stage {
+    min-height: 600px;
+  }
+
+  .region-list {
+    max-height: 430px;
   }
 }
 
@@ -3832,11 +4146,23 @@ textarea:focus-visible {
   }
 
   .atlas-workspace {
+    min-height: 0;
     border-radius: 2px;
   }
 
   .region-rail {
     padding: 14px;
+  }
+
+  .region-list {
+    max-height: none;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-gutter: auto;
+  }
+
+  .all-regions-link {
+    display: flex;
   }
 
   .anatomy-stage {
@@ -3864,8 +4190,33 @@ textarea:focus-visible {
     box-shadow: 9px 10px 0 #060a0c;
   }
 
+  .search-field input,
+  .description-box textarea,
+  .guided-number-field input {
+    font-size: 16px;
+  }
+
+  .compare-section {
+    padding: 80px 0;
+  }
+
+  .compare-popover {
+    left: 0;
+    width: 100%;
+    max-width: calc(100vw - 56px);
+  }
+
+  .follow-up-card .secondary-button {
+    width: 100%;
+    margin-left: 0;
+  }
+
   .source-card {
     padding: 24px;
+  }
+
+  .source-card h2 {
+    font-size: clamp(38px, 11vw, 48px);
   }
 }
 
@@ -3876,6 +4227,10 @@ textarea:focus-visible {
 
   .hero-visual {
     min-height: 390px;
+  }
+
+  .hero-anatomy-card {
+    aspect-ratio: .98;
   }
 
   .hero-plate-head,
@@ -3894,5 +4249,19 @@ textarea:focus-visible {
 
   .anatomy-stage {
     height: 650px;
+  }
+
+  .timeline-buttons button {
+    font-size: 10px;
+  }
+
+  .source-card h2 {
+    font-size: 34px;
+  }
+}
+
+@media (max-width: 374px) {
+  .stage-instruction {
+    display: none;
   }
 }
