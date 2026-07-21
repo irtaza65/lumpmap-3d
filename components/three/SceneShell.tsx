@@ -21,7 +21,7 @@ const SHELL_STYLE = {
   overflow: "hidden",
   borderRadius: "inherit",
   background:
-    "radial-gradient(circle at 50% 34%, rgba(69, 130, 126, 0.15), transparent 38%), linear-gradient(180deg, #0b181d 0%, #071216 100%)",
+    "radial-gradient(circle at 50% 38%, rgba(151, 164, 162, 0.08), transparent 36%), #090f12",
 } as const;
 
 export function useWebGLSupport(): boolean | null {
@@ -99,7 +99,8 @@ export function SceneFallback({
         display: "grid",
         placeItems: "center",
         padding: 28,
-        color: "#e8eee9",
+        color: "#dfddd6",
+        fontFamily: "var(--font-body), sans-serif",
         textAlign: "center",
       }}
     >
@@ -188,11 +189,21 @@ export function SceneFallback({
             </>
           )}
         </div>
-        <div style={{ fontWeight: 650, letterSpacing: "0.01em" }}>{title}</div>
+        <div
+          style={{
+            fontFamily: "var(--font-display), sans-serif",
+            fontSize: 20,
+            fontWeight: 500,
+            letterSpacing: ".06em",
+            textTransform: "uppercase",
+          }}
+        >
+          {title}
+        </div>
         <div
           style={{
             marginTop: 7,
-            color: "#aab9b5",
+            color: "#8d9795",
             fontSize: 13,
             lineHeight: 1.55,
           }}
@@ -215,9 +226,10 @@ function LoadingScene() {
         placeItems: "center",
         pointerEvents: "none",
         zIndex: 2,
-        color: "#90aaa5",
-        fontSize: 11,
-        letterSpacing: "0.16em",
+        color: "#788482",
+        fontFamily: "var(--font-display), sans-serif",
+        fontSize: 12,
+        letterSpacing: "0.14em",
         textTransform: "uppercase",
       }}
     >

@@ -256,13 +256,10 @@ export default function LumpMapApp() {
 
       <header className="site-header">
         <a className="brand" href="#top" aria-label="LumpMap 3D home">
-          <span className="brand-mark" aria-hidden="true">
-            LM
+          <span className="brand-wordmark" aria-hidden="true">
+            LUMPMAP <b>3D</b>
           </span>
-          <span>
-            <strong>LumpMap</strong>
-            <small>3D anatomy navigator</small>
-          </span>
+          <small>Visual anatomy atlas</small>
         </a>
 
         <nav className="desktop-nav" aria-label="Primary navigation">
@@ -275,7 +272,7 @@ export default function LumpMapApp() {
 
         <div className="header-actions">
           <span className="demo-pill">
-            <span className="status-dot" aria-hidden="true" /> Demo ready
+            <span className="status-dot" aria-hidden="true" /> Educational atlas
           </span>
           <button
             className="icon-button mobile-menu-button"
@@ -315,7 +312,8 @@ export default function LumpMapApp() {
       <section id="top" className="hero-shell">
         <div className="hero-copy">
           <p className="eyebrow">
-            <Sparkles aria-hidden="true" /> Anatomy-first health education
+            <span className="eyebrow-index" aria-hidden="true">01</span>
+            Anatomy-first health education
           </p>
           <h1>
             Not every lump
@@ -367,6 +365,10 @@ export default function LumpMapApp() {
           <div className="hero-halo hero-halo-one" />
           <div className="hero-halo hero-halo-two" />
           <div className="hero-anatomy-card">
+            <div className="hero-plate-head">
+              <span>Tissue section / 01</span>
+              <strong>Surface &rarr; fascia</strong>
+            </div>
             <div className="hero-cross-section">
               <div className="skin-layer skin-epidermis" />
               <div className="skin-layer skin-dermis">
@@ -382,6 +384,11 @@ export default function LumpMapApp() {
             <div className="floating-label label-surface">Skin surface</div>
             <div className="floating-label label-follicle">Hair follicle</div>
             <div className="floating-label label-depth">Depth matters</div>
+            <div className="hero-plate-foot">
+              <span>Location</span><i />
+              <span>Depth</span><i />
+              <span>Pattern</span>
+            </div>
           </div>
         </div>
       </section>
@@ -415,7 +422,7 @@ export default function LumpMapApp() {
               />
             </label>
             <div className="region-list">
-              {filteredRegions.map((region) => (
+              {filteredRegions.map((region, index) => (
                 <button
                   type="button"
                   key={region.id}
@@ -425,7 +432,7 @@ export default function LumpMapApp() {
                   onClick={() => selectRegion(region.id)}
                 >
                   <span className="region-glyph" aria-hidden="true">
-                    <LocateFixed />
+                    {String(index + 1).padStart(2, "0")}
                   </span>
                   <span>
                     <strong>{region.shortLabel}</strong>
@@ -672,8 +679,8 @@ export default function LumpMapApp() {
       <footer className="site-footer">
         <div className="footer-main">
           <a className="brand footer-brand" href="#top">
-            <span className="brand-mark" aria-hidden="true">LM</span>
-            <span><strong>LumpMap</strong><small>Understand what’s beneath the skin.</small></span>
+            <span className="brand-wordmark" aria-hidden="true">LUMPMAP <b>3D</b></span>
+            <small>Understand what&apos;s beneath the skin.</small>
           </a>
           <p>{MEDICAL_REVIEW_NOTICE}</p>
           <div className="footer-actions">

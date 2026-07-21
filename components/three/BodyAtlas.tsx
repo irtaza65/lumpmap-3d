@@ -16,6 +16,7 @@ import {
   Group,
   MathUtils,
   MeshPhysicalMaterial,
+  Vector2,
   Vector3,
 } from "three";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
@@ -182,7 +183,7 @@ function RegionHotspot({
     region.position[1],
     z,
   ];
-  const color = selected ? "#f1b76e" : hovered ? "#b8eee5" : "#72d6c8";
+  const color = selected ? "#d97954" : hovered ? "#f3eee5" : "#a9bbb4";
 
   useEffect(() => {
     return () => {
@@ -190,11 +191,15 @@ function RegionHotspot({
     };
   }, [gl]);
 
-  useFrame(({ clock }, delta) => {
+  useFrame((_state, delta) => {
     if (!group.current) return;
-    const pulse = reducedMotion ? 1 : 1 + Math.sin(clock.elapsedTime * 2.4) * 0.06;
-    const target = (selected ? 1.25 : hovered ? 1.14 : 1) * pulse;
-    const scale = MathUtils.damp(group.current.scale.x, target, 9, delta);
+    const target = selected ? 1.1 : hovered ? 1.06 : 1;
+    const scale = MathUtils.damp(
+      group.current.scale.x,
+      target,
+      reducedMotion ? 18 : 9,
+      delta,
+    );
     group.current.scale.setScalar(scale);
   });
 
@@ -206,6 +211,18 @@ function RegionHotspot({
   return (
     <group ref={group} position={position}>
       <Billboard follow>
+        {selected && (
+          <mesh position={[0, 0, -0.012]}>
+            <circleGeometry args={[0.16, 32]} />
+            <meshBasicMaterial
+              color="#d97954"
+              transparent
+              opacity={0.1}
+              depthTest={false}
+              depthWrite={false}
+            />
+          </mesh>
+        )}
         <mesh
           onClick={handleClick}
           onPointerEnter={(event) => {
@@ -218,20 +235,25 @@ function RegionHotspot({
             gl.domElement.style.cursor = "";
           }}
         >
-          <circleGeometry args={[0.105, 28]} />
+          <circleGeometry args={[selected ? 0.075 : 0.048, 28]} />
           <meshBasicMaterial
             color={color}
             transparent
-            opacity={selected ? 0.96 : 0.78}
+            opacity={selected ? 0.96 : hovered ? 0.82 : 0.2}
             depthTest={false}
           />
         </mesh>
         <mesh position={[0, 0, -0.004]}>
-          <ringGeometry args={[0.13, 0.145, 32]} />
-          <meshBasicMaterial color={color} transparent opacity={0.48} depthTest={false} />
+          <ringGeometry args={[selected ? 0.098 : 0.068, selected ? 0.11 : 0.077, 32]} />
+          <meshBasicMaterial
+            color={color}
+            transparent
+            opacity={selected ? 0.72 : hovered ? 0.46 : 0.12}
+            depthTest={false}
+          />
         </mesh>
       </Billboard>
-      {showLabel && (
+      {(showLabel || hovered) && (
         <Html
           center
           position={[
@@ -239,23 +261,27 @@ function RegionHotspot({
             0,
             0,
           ]}
-          distanceFactor={8.5}
+          distanceFactor={7.1}
           zIndexRange={[30, 0]}
           style={{ pointerEvents: "none" }}
         >
           <div
             style={{
-              padding: "5px 8px",
-              border: `1px solid ${selected ? "rgba(241,183,110,.75)" : "rgba(121,215,202,.4)"}`,
-              borderRadius: 999,
-              background: "rgba(6,18,22,.82)",
-              boxShadow: "0 8px 24px rgba(0,0,0,.25)",
-              color: selected ? "#ffd6a5" : "#d8eee9",
-              fontFamily: "ui-sans-serif, system-ui, sans-serif",
-              fontSize: 9,
-              fontWeight: 650,
-              letterSpacing: ".035em",
-              lineHeight: 1,
+              padding: "5px 7px 5px 8px",
+              borderTop: `1px solid ${selected ? "rgba(217,121,84,.7)" : "rgba(225,220,210,.24)"}`,
+              borderRight: `1px solid ${selected ? "rgba(217,121,84,.7)" : "rgba(225,220,210,.24)"}`,
+              borderBottom: `1px solid ${selected ? "rgba(217,121,84,.7)" : "rgba(225,220,210,.24)"}`,
+              borderLeft: `2px solid ${selected ? "rgba(217,121,84,.7)" : "rgba(225,220,210,.24)"}`,
+              borderRadius: 1,
+              background: "rgba(9,14,17,.92)",
+              boxShadow: "0 5px 16px rgba(0,0,0,.18)",
+              color: selected ? "#f2c3ac" : "#e4e0d7",
+              fontFamily: "var(--font-display), sans-serif",
+              fontSize: 11,
+              fontWeight: 500,
+              letterSpacing: ".06em",
+              lineHeight: 1.05,
+              textTransform: "uppercase",
               whiteSpace: "nowrap",
               backdropFilter: "blur(6px)",
             }}
@@ -282,133 +308,254 @@ function Mannequin({
   orientation,
   showLabels,
   reducedMotion,
-  interactionPaused,
   onSelect,
 }: MannequinProps) {
-  const idleGroup = useRef<Group>(null);
-  const material = useMemo(
-    () =>
-      new MeshPhysicalMaterial({
-        color: new Color("#93c9c0"),
-        emissive: new Color("#163b3d"),
-        emissiveIntensity: 0.24,
-        roughness: 0.3,
-        metalness: 0.02,
-        clearcoat: 0.72,
-        clearcoatRoughness: 0.34,
-        transmission: 0.12,
-        thickness: 0.75,
-        transparent: true,
-        opacity: 0.9,
-      }),
+  const materials = useMemo(() => {
+    const body = new MeshPhysicalMaterial({
+      color: new Color("#bcae9f"),
+      emissive: new Color("#151311"),
+      emissiveIntensity: 0.025,
+      roughness: 0.82,
+      metalness: 0,
+      clearcoat: 0,
+      sheen: 0.06,
+      sheenColor: new Color("#ead8c8"),
+      sheenRoughness: 0.96,
+    });
+    const plane = new MeshPhysicalMaterial({
+      color: new Color("#9c897d"),
+      emissive: new Color("#332b28"),
+      emissiveIntensity: 0.05,
+      roughness: 0.7,
+      clearcoat: 0.05,
+      transparent: true,
+      opacity: 0.68,
+      depthWrite: false,
+    });
+    const shadow = new MeshPhysicalMaterial({
+      color: new Color("#75675f"),
+      roughness: 0.82,
+      transparent: true,
+      opacity: 0.5,
+      depthWrite: false,
+    });
+    return { body, plane, shadow };
+  }, []);
+  const torsoProfile = useMemo(
+    () => [
+      new Vector2(0.39, -0.64),
+      new Vector2(0.55, -0.56),
+      new Vector2(0.66, -0.36),
+      new Vector2(0.63, -0.16),
+      new Vector2(0.49, 0.06),
+      new Vector2(0.47, 0.34),
+      new Vector2(0.53, 0.66),
+      new Vector2(0.62, 0.92),
+      new Vector2(0.7, 1.2),
+      new Vector2(0.72, 1.38),
+      new Vector2(0.56, 1.51),
+      new Vector2(0.32, 1.62),
+      new Vector2(0.22, 1.64),
+    ],
+    [],
+  );
+  const limbProfiles = useMemo(
+    () => ({
+      upperArm: [
+        new Vector2(0.125, -0.53),
+        new Vector2(0.145, -0.33),
+        new Vector2(0.17, -0.02),
+        new Vector2(0.19, 0.3),
+        new Vector2(0.155, 0.53),
+      ],
+      forearm: [
+        new Vector2(0.08, -0.42),
+        new Vector2(0.095, -0.28),
+        new Vector2(0.13, -0.02),
+        new Vector2(0.145, 0.22),
+        new Vector2(0.11, 0.41),
+      ],
+      thigh: [
+        new Vector2(0.175, -0.68),
+        new Vector2(0.205, -0.48),
+        new Vector2(0.245, -0.12),
+        new Vector2(0.275, 0.32),
+        new Vector2(0.225, 0.68),
+      ],
+      calf: [
+        new Vector2(0.095, -0.45),
+        new Vector2(0.12, -0.29),
+        new Vector2(0.17, -0.04),
+        new Vector2(0.18, 0.2),
+        new Vector2(0.125, 0.44),
+      ],
+    }),
     [],
   );
 
-  useEffect(() => () => material.dispose(), [material]);
+  useEffect(
+    () => () => {
+      materials.body.dispose();
+      materials.plane.dispose();
+      materials.shadow.dispose();
+    },
+    [materials],
+  );
 
-  useFrame(({ clock }, delta) => {
-    if (!idleGroup.current || reducedMotion || interactionPaused || selectedRegion) return;
-    const target = Math.sin(clock.elapsedTime * 0.22) * 0.11;
-    idleGroup.current.rotation.y = MathUtils.damp(
-      idleGroup.current.rotation.y,
-      target,
-      1.1,
-      delta,
-    );
-  });
-
-  const part = (key: string, position: [number, number, number], scale: [number, number, number]) => (
-    <mesh key={key} position={position} scale={scale} material={material} castShadow>
+  const part = (
+    key: string,
+    position: [number, number, number],
+    scale: [number, number, number],
+    material = materials.body,
+    rotation?: [number, number, number],
+  ) => (
+    <mesh
+      key={key}
+      position={position}
+      rotation={rotation}
+      scale={scale}
+      material={material}
+      castShadow
+    >
       <sphereGeometry args={[1, 32, 24]} />
     </mesh>
   );
 
   return (
-    <group ref={idleGroup}>
+    <group>
       <group>
-        {part("head", [0, 2.42, 0], [0.34, 0.43, 0.32])}
-        {part("jaw", [0, 2.16, 0.015], [0.27, 0.25, 0.25])}
-        <mesh position={[0, 1.88, 0]} material={material} castShadow>
-          <capsuleGeometry args={[0.145, 0.23, 8, 18]} />
+        {/* The head uses overlapping cranial, facial, and jaw volumes so the
+            front reads immediately without turning into a literal portrait. */}
+        {part("cranium", [0, 2.46, -0.015], [0.29, 0.37, 0.28])}
+        {part("face", [0, 2.31, 0.08], [0.24, 0.265, 0.23])}
+        {part("jaw", [0, 2.14, 0.035], [0.205, 0.17, 0.195])}
+        {part("ear-l", [-0.272, 2.36, 0], [0.038, 0.09, 0.048], materials.plane)}
+        {part("ear-r", [0.272, 2.36, 0], [0.038, 0.09, 0.048], materials.plane)}
+        {part("nose", [0, 2.37, 0.292], [0.045, 0.078, 0.06], materials.plane)}
+        {part("brow-l", [-0.088, 2.46, 0.272], [0.078, 0.018, 0.022], materials.plane, [0, 0, -0.05])}
+        {part("brow-r", [0.088, 2.46, 0.272], [0.078, 0.018, 0.022], materials.plane, [0, 0, 0.05])}
+
+        <mesh position={[0, 1.89, 0]} material={materials.body} castShadow>
+          <cylinderGeometry args={[0.165, 0.215, 0.48, 32]} />
         </mesh>
 
-        {part("chest", [0, 1.23, 0], [0.73, 0.82, 0.37])}
-        {part("ribcage", [0, 0.92, 0], [0.62, 0.73, 0.34])}
-        {part("waist", [0, 0.28, 0], [0.43, 0.53, 0.3])}
-        {part("pelvis", [0, -0.31, 0], [0.66, 0.48, 0.39])}
+        {/* A single continuous trunk profile replaces the stacked-ball torso.
+            The compressed depth keeps it anatomical in front and side views. */}
+        <mesh scale={[1, 1, 0.58]} material={materials.body} castShadow>
+          <latheGeometry args={[torsoProfile, 64]} />
+        </mesh>
+        {part("shoulder-l", [-0.67, 1.34, 0], [0.225, 0.285, 0.245], materials.body, [0, 0, -0.12])}
+        {part("shoulder-r", [0.67, 1.34, 0], [0.225, 0.285, 0.245], materials.body, [0, 0, 0.12])}
 
-        {part("shoulder-l", [-0.69, 1.42, 0], [0.31, 0.3, 0.3])}
-        {part("shoulder-r", [0.69, 1.42, 0], [0.31, 0.3, 0.3])}
+        {/* Quiet surface landmarks make the mannequin feel sculpted, not
+            assembled, while remaining gender-neutral and non-diagnostic. */}
         <mesh
-          position={[-0.86, 0.82, 0]}
-          rotation={[0, 0, -0.08]}
-          material={material}
-          castShadow
+          position={[-0.22, 1.4, 0.368]}
+          rotation={[0, 0, Math.PI / 2 - 0.14]}
+          material={materials.plane}
         >
-          <capsuleGeometry args={[0.17, 0.82, 8, 16]} />
+          <capsuleGeometry args={[0.014, 0.28, 5, 12]} />
         </mesh>
         <mesh
-          position={[0.86, 0.82, 0]}
-          rotation={[0, 0, 0.08]}
-          material={material}
-          castShadow
+          position={[0.22, 1.4, 0.368]}
+          rotation={[0, 0, Math.PI / 2 + 0.14]}
+          material={materials.plane}
         >
-          <capsuleGeometry args={[0.17, 0.82, 8, 16]} />
+          <capsuleGeometry args={[0.014, 0.28, 5, 12]} />
         </mesh>
+        <mesh position={[0, 0.98, 0.355]} material={materials.shadow}>
+          <capsuleGeometry args={[0.018, 0.5, 6, 14]} />
+        </mesh>
+        {part("abdomen-plane", [0, 0.28, 0.285], [0.32, 0.4, 0.035], materials.plane)}
+        {part("scapula-l", [-0.28, 1.08, -0.35], [0.24, 0.32, 0.04], materials.plane, [0.08, 0, -0.12])}
+        {part("scapula-r", [0.28, 1.08, -0.35], [0.24, 0.32, 0.04], materials.plane, [0.08, 0, 0.12])}
+        <mesh position={[0, 0.48, -0.31]} material={materials.shadow}>
+          <capsuleGeometry args={[0.016, 0.78, 6, 14]} />
+        </mesh>
+        {part("glute-l", [-0.25, -0.38, -0.2], [0.34, 0.35, 0.22])}
+        {part("glute-r", [0.25, -0.38, -0.2], [0.34, 0.35, 0.22])}
+        <mesh position={[0, -0.47, -0.405]} material={materials.shadow}>
+          <capsuleGeometry args={[0.017, 0.43, 6, 14]} />
+        </mesh>
+
+        {/* Arms carry a relaxed anatomical stance: rounded deltoid, soft
+            elbow, tapered forearm, and a distinct palm instead of tubes. */}
+        <mesh position={[-0.8, 0.89, 0]} rotation={[0, 0, -0.11]} material={materials.body} castShadow>
+          <latheGeometry args={[limbProfiles.upperArm, 32]} />
+        </mesh>
+        <mesh position={[0.8, 0.89, 0]} rotation={[0, 0, 0.11]} material={materials.body} castShadow>
+          <latheGeometry args={[limbProfiles.upperArm, 32]} />
+        </mesh>
+        {part("elbow-l", [-0.86, 0.35, 0], [0.118, 0.125, 0.12])}
+        {part("elbow-r", [0.86, 0.35, 0], [0.118, 0.125, 0.12])}
         <mesh
-          position={[-0.94, -0.03, 0]}
+          position={[-0.91, -0.04, 0]}
           rotation={[0, 0, -0.04]}
-          material={material}
+          material={materials.body}
           castShadow
         >
-          <capsuleGeometry args={[0.135, 0.72, 8, 16]} />
+          <latheGeometry args={[limbProfiles.forearm, 32]} />
         </mesh>
         <mesh
-          position={[0.94, -0.03, 0]}
+          position={[0.91, -0.04, 0]}
           rotation={[0, 0, 0.04]}
-          material={material}
+          material={materials.body}
           castShadow
         >
-          <capsuleGeometry args={[0.135, 0.72, 8, 16]} />
+          <latheGeometry args={[limbProfiles.forearm, 32]} />
         </mesh>
-        <mesh position={[-0.98, -0.58, 0.035]} material={material} castShadow>
-          <capsuleGeometry args={[0.105, 0.27, 8, 16]} />
+        <mesh position={[-0.95, -0.48, 0.015]} material={materials.body} castShadow>
+          <cylinderGeometry args={[0.085, 0.1, 0.2, 24]} />
         </mesh>
-        <mesh position={[0.98, -0.58, 0.035]} material={material} castShadow>
-          <capsuleGeometry args={[0.105, 0.27, 8, 16]} />
+        <mesh position={[0.95, -0.48, 0.015]} material={materials.body} castShadow>
+          <cylinderGeometry args={[0.085, 0.1, 0.2, 24]} />
         </mesh>
+        {part("palm-l", [-0.97, -0.67, 0.045], [0.105, 0.235, 0.078], materials.body, [0.02, 0, -0.02])}
+        {part("palm-r", [0.97, -0.67, 0.045], [0.105, 0.235, 0.078], materials.body, [0.02, 0, 0.02])}
+        {part("thumb-l", [-0.875, -0.62, 0.055], [0.043, 0.115, 0.052], materials.body, [0, 0, -0.32])}
+        {part("thumb-r", [0.875, -0.62, 0.055], [0.043, 0.115, 0.052], materials.body, [0, 0, 0.32])}
 
-        <mesh position={[-0.36, -1.17, 0]} material={material} castShadow>
-          <capsuleGeometry args={[0.255, 1.02, 10, 20]} />
+        {/* Hips flow into broad proximal thighs, then narrow through the knee
+            before the calf and ankle. Small front kneecaps add orientation. */}
+        <mesh position={[-0.31, -1.17, 0]} material={materials.body} castShadow>
+          <latheGeometry args={[limbProfiles.thigh, 36]} />
         </mesh>
-        <mesh position={[0.36, -1.17, 0]} material={material} castShadow>
-          <capsuleGeometry args={[0.255, 1.02, 10, 20]} />
+        <mesh position={[0.31, -1.17, 0]} material={materials.body} castShadow>
+          <latheGeometry args={[limbProfiles.thigh, 36]} />
         </mesh>
-        {part("knee-l", [-0.37, -1.84, 0.015], [0.25, 0.25, 0.24])}
-        {part("knee-r", [0.37, -1.84, 0.015], [0.25, 0.25, 0.24])}
-        <mesh position={[-0.39, -2.31, 0]} material={material} castShadow>
-          <capsuleGeometry args={[0.19, 0.72, 10, 18]} />
+        {part("knee-l", [-0.32, -1.82, 0.015], [0.205, 0.205, 0.195])}
+        {part("knee-r", [0.32, -1.82, 0.015], [0.205, 0.205, 0.195])}
+        {part("patella-l", [-0.32, -1.82, 0.19], [0.12, 0.145, 0.055], materials.plane)}
+        {part("patella-r", [0.32, -1.82, 0.19], [0.12, 0.145, 0.055], materials.plane)}
+        <mesh position={[-0.33, -2.29, 0]} material={materials.body} castShadow>
+          <latheGeometry args={[limbProfiles.calf, 32]} />
         </mesh>
-        <mesh position={[0.39, -2.31, 0]} material={material} castShadow>
-          <capsuleGeometry args={[0.19, 0.72, 10, 18]} />
+        <mesh position={[0.33, -2.29, 0]} material={materials.body} castShadow>
+          <latheGeometry args={[limbProfiles.calf, 32]} />
+        </mesh>
+        <mesh position={[-0.34, -2.72, 0]} material={materials.body} castShadow>
+          <cylinderGeometry args={[0.105, 0.125, 0.25, 24]} />
+        </mesh>
+        <mesh position={[0.34, -2.72, 0]} material={materials.body} castShadow>
+          <cylinderGeometry args={[0.105, 0.125, 0.25, 24]} />
         </mesh>
         <mesh
-          position={[-0.39, -2.83, 0.12]}
+          position={[-0.34, -2.88, 0.14]}
           rotation={[Math.PI / 2, 0, 0]}
-          scale={[1, 1.35, 1]}
-          material={material}
+          scale={[1, 1.28, 1]}
+          material={materials.body}
           castShadow
         >
-          <capsuleGeometry args={[0.15, 0.32, 8, 16]} />
+          <capsuleGeometry args={[0.135, 0.33, 8, 18]} />
         </mesh>
         <mesh
-          position={[0.39, -2.83, 0.12]}
+          position={[0.34, -2.88, 0.14]}
           rotation={[Math.PI / 2, 0, 0]}
-          scale={[1, 1.35, 1]}
-          material={material}
+          scale={[1, 1.28, 1]}
+          material={materials.body}
           castShadow
         >
-          <capsuleGeometry args={[0.15, 0.32, 8, 16]} />
+          <capsuleGeometry args={[0.135, 0.33, 8, 18]} />
         </mesh>
       </group>
 
@@ -420,7 +567,7 @@ function Mannequin({
             key={region.id}
             region={region}
             selected={selectedRegion === region.id}
-            showLabel={showLabels || selectedRegion === region.id}
+            showLabel={showLabels && selectedRegion === region.id}
             reducedMotion={reducedMotion}
             orientation={orientation}
             onSelect={onSelect}
@@ -453,11 +600,16 @@ function AtlasControls({
   const { camera } = useThree();
   const region = ATLAS_REGIONS.find((item) => item.id === selectedRegion);
   const desiredTarget = useMemo(
-    () => new Vector3(region ? region.position[0] * 0.12 : 0, region?.cameraTargetY ?? -0.05, 0),
+    () =>
+      new Vector3(
+        region ? region.position[0] * 0.045 : 0,
+        region ? -0.05 + (region.cameraTargetY + 0.05) * 0.16 : -0.05,
+        0,
+      ),
     [region],
   );
-  const desiredDistance = region ? 4.25 : 6.25;
-  const desiredY = (region?.cameraTargetY ?? -0.05) + (region ? 0.12 : 0.08);
+  const desiredDistance = region ? 9.35 : 9.7;
+  const desiredY = desiredTarget.y + 0.08;
 
   useEffect(() => {
     const controlTarget = controls.current?.target ?? desiredTarget;
@@ -511,8 +663,8 @@ function AtlasControls({
       enablePan={false}
       enableDamping={!reducedMotion}
       dampingFactor={0.075}
-      minDistance={3.55}
-      maxDistance={7.25}
+      minDistance={6.8}
+      maxDistance={11.4}
       minPolarAngle={0.72}
       maxPolarAngle={2.42}
       rotateSpeed={0.65}
@@ -542,19 +694,19 @@ function AtlasScene({
 
   return (
     <>
-      <fog attach="fog" args={["#071216", 6.4, 11]} />
-      <ambientLight intensity={1.15} color="#d8f4ed" />
-      <hemisphereLight args={["#b7f1e6", "#102329", 1.3]} />
+      <fog attach="fog" args={["#0b1112", 9.2, 16]} />
+      <ambientLight intensity={1.25} color="#eee6dc" />
+      <hemisphereLight args={["#d9dfda", "#2b2523", 1.05]} />
       <spotLight
         position={[3.8, 5.4, 4.5]}
         angle={0.42}
         penumbra={0.9}
-        intensity={42}
-        color="#f4eee2"
+        intensity={36}
+        color="#ffe9d6"
         castShadow
       />
-      <pointLight position={[-3, 1.5, -2.5]} intensity={9} color="#4db9b4" />
-      <pointLight position={[2.4, -1.4, 2]} intensity={5} color="#dca469" />
+      <pointLight position={[-3, 1.5, -2.5]} intensity={6} color="#819b96" />
+      <pointLight position={[2.4, -1.4, 2]} intensity={4} color="#c78364" />
       <Mannequin
         selectedRegion={selectedRegion}
         orientation={orientation}
@@ -625,7 +777,7 @@ export function BodyAtlas({
       fallbackKind="body"
       fallbackTitle="The 3D body map could not load"
       fallbackMessage="You can still explore every location with the accessible region list."
-      camera={{ position: [0, 0, 6.25], fov: 34, near: 0.1, far: 40 }}
+      camera={{ position: [0, 0, 9.7], fov: 34, near: 0.1, far: 40 }}
       onStatusChange={onStatusChange}
     >
       <AtlasScene

@@ -119,21 +119,21 @@ function CutawayWorld({
 
   return (
     <>
-      <fog attach="fog" args={["#071216", 10, 18]} />
-      <ambientLight intensity={1.22} color="#fff2e8" />
-      <hemisphereLight args={["#dff8f2", "#2c2022", 1.25]} />
+      <fog attach="fog" args={["#090f12", 10, 18]} />
+      <ambientLight intensity={1.08} color="#f1e8dc" />
+      <hemisphereLight args={["#d9dedb", "#312728", 1.05]} />
       <spotLight
         position={[4.5, 6.5, 5.2]}
-        intensity={54}
+        intensity={46}
         angle={0.47}
         penumbra={0.86}
-        color="#fff0df"
+        color="#f4e6d6"
         castShadow
       />
-      <pointLight position={[-4, 1.8, 3]} intensity={8} color="#57b7b5" />
+      <pointLight position={[-4, 1.8, 3]} intensity={5.5} color="#9baaa7" />
       <pointLight
         position={[2.1, 0.4, 3.8]}
-        intensity={pathologyLight}
+        intensity={pathologyLight * 0.7}
         color={scene.accent}
       />
       <group position={[0, 0.1, 0]}>
@@ -213,12 +213,12 @@ export function SkinCutaway({
           maxWidth: "min(230px, 58%)",
           padding: "7px 10px",
           border: `1px solid color-mix(in srgb, ${scene.accent} 50%, transparent)`,
-          borderRadius: 999,
-          background: "rgba(5, 16, 20, .74)",
-          color: "#dfeae7",
-          fontFamily: "ui-sans-serif, system-ui, sans-serif",
-          fontSize: 10,
-          fontWeight: 680,
+          borderRadius: 1,
+          background: "rgba(7, 12, 15, .9)",
+          color: "#c8cbc6",
+          fontFamily: "var(--font-display), sans-serif",
+          fontSize: 11,
+          fontWeight: 500,
           lineHeight: 1.2,
           letterSpacing: ".055em",
           textTransform: "uppercase",
@@ -226,7 +226,7 @@ export function SkinCutaway({
           whiteSpace: "nowrap",
           overflow: "hidden",
           pointerEvents: "none",
-          backdropFilter: "blur(8px)",
+          backdropFilter: "blur(4px)",
         }}
       >
         {scene.stageLabels[safeStage]}
@@ -238,15 +238,17 @@ export function SkinCutaway({
           left: 14,
           bottom: 12,
           padding: "7px 9px",
-          borderRadius: 8,
-          background: "rgba(4, 14, 18, .72)",
-          color: "#aab9b5",
-          fontFamily: "ui-sans-serif, system-ui, sans-serif",
-          fontSize: 10,
+          border: "1px solid rgba(205, 214, 213, .14)",
+          borderRadius: 1,
+          background: "rgba(7, 12, 15, .86)",
+          color: "#8f9997",
+          fontFamily: "var(--font-display), sans-serif",
+          fontSize: 11,
           lineHeight: 1.3,
-          letterSpacing: ".015em",
+          letterSpacing: ".05em",
           pointerEvents: "none",
-          backdropFilter: "blur(7px)",
+          textTransform: "uppercase",
+          backdropFilter: "blur(4px)",
         }}
       >
         Possible progression, not a prediction.

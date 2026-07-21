@@ -1,12 +1,13 @@
 "use client";
 
 import { useMemo, useRef, type ReactNode } from "react";
-import { Html, RoundedBox } from "@react-three/drei";
+import { Html } from "@react-three/drei";
 import { useFrame } from "@react-three/fiber";
 import {
   CatmullRomCurve3,
   Group,
   MathUtils,
+  Shape,
   Vector3,
 } from "three";
 import type { CutawaySceneId, CutawayStage } from "../types";
@@ -14,21 +15,24 @@ import type { CutawaySceneId, CutawayStage } from "../types";
 type Point = readonly [number, number, number];
 
 const COLORS = {
-  epidermis: "#e5b99f",
-  dermis: "#c98582",
-  dermisDark: "#a85f66",
-  fat: "#e1b65e",
-  fascia: "#d8c8b5",
-  muscle: "#8f4d4f",
-  follicle: "#8d5d58",
-  hair: "#332726",
-  sebum: "#e6b781",
-  inflammation: "#e96f68",
-  fluid: "#efc775",
-  cyst: "#c5b0e7",
-  joint: "#d6dbe0",
-  tendon: "#91b9b5",
+  epidermis: "#bd8b74",
+  dermis: "#9f6264",
+  dermisDark: "#75454b",
+  fat: "#b29150",
+  fascia: "#b7ada1",
+  muscle: "#714147",
+  follicle: "#6f4548",
+  hair: "#2d2524",
+  sebum: "#bd8e68",
+  inflammation: "#b7534e",
+  fluid: "#b89a61",
+  cyst: "#998b99",
+  joint: "#aeb3b3",
+  tendon: "#718b86",
 } as const;
+
+const FRONT_Z = 1.38;
+const TISSUE_DEPTH = 2.72;
 
 type AnimatedGroupProps = {
   children: ReactNode;
@@ -66,6 +70,7 @@ type TubeProps = {
   color: string;
   opacity?: number;
   radialSegments?: number;
+  tubularSegments?: number;
 };
 
 function Tube({
@@ -73,7 +78,8 @@ function Tube({
   radius,
   color,
   opacity = 1,
-  radialSegments = 9,
+  radialSegments = 8,
+  tubularSegments = 30,
 }: TubeProps) {
   const pathKey = points.flat().join(":");
   const curve = useMemo(
@@ -85,13 +91,14 @@ function Tube({
 
   return (
     <mesh>
-      <tubeGeometry args={[curve, 42, radius, radialSegments, false]} />
-      <meshPhysicalMaterial
+      <tubeGeometry args={[curve, tubularSegments, radius, radialSegments, false]} />
+      <meshStandardMaterial
         color={color}
-        roughness={0.5}
-        clearcoat={0.2}
+        roughness={0.86}
+        metalness={0}
         transparent={opacity < 1}
         opacity={opacity}
+        depthWrite={opacity >= 0.55}
       />
     </mesh>
   );
@@ -110,11 +117,17 @@ function SceneLabel({
   accent = "#79d7ca",
   align = "left",
 }: SceneLabelProps) {
+  const safePosition: Point = [
+    MathUtils.clamp(position[0], -1.55, 1.55),
+    position[1],
+    position[2],
+  ];
+
   return (
     <Html
-      position={position}
+      position={safePosition}
       center
-      distanceFactor={7.5}
+      distanceFactor={4.7}
       zIndexRange={[20, 0]}
       style={{ pointerEvents: "none" }}
     >
@@ -124,22 +137,22 @@ function SceneLabel({
           alignItems: "center",
           flexDirection: align === "left" ? "row" : "row-reverse",
           gap: 7,
-          color: "#e5efec",
-          fontFamily: "ui-sans-serif, system-ui, sans-serif",
-          fontSize: 9,
-          fontWeight: 650,
-          letterSpacing: ".035em",
+          color: "#e2dfd7",
+          fontFamily: "var(--font-display), sans-serif",
+          fontSize: 10,
+          fontWeight: 500,
+          letterSpacing: ".055em",
+          textTransform: "uppercase",
           whiteSpace: "nowrap",
           textShadow: "0 2px 8px rgba(0,0,0,.8)",
         }}
       >
         <span
           style={{
-            width: 20,
+            width: 15,
             height: 1,
             display: "block",
             background: accent,
-            boxShadow: `0 0 8px ${accent}`,
           }}
         />
         <span>{title}</span>
@@ -148,67 +161,234 @@ function SceneLabel({
   );
 }
 
-function SoftLayer({
-  position,
-  size,
+type ProfilePoint = readonly [number, number];
+
+const PROFILE_X = [
+  -2.7, -2.3, -1.85, -1.4, -0.95, -0.58, -0.3, 0, 0.3, 0.58, 0.95, 1.4,
+  1.85, 2.3, 2.7,
+] as const;
+
+const SURFACE_VARIATION = [
+  0, 0.025, -0.018, 0.034, -0.012, 0.018, -0.01, 0.012, -0.014, 0.02,
+  -0.008, 0.026, -0.016, 0.022, 0,
+] as const;
+
+function makeProfile(
+  getY: (x: number, index: number) => number,
+): readonly ProfilePoint[] {
+  return PROFILE_X.map((x, index) => [x, getY(x, index)] as const);
+}
+
+const FLAT_SURFACE = makeProfile(
+  (_x, index) => 1.045 + SURFACE_VARIATION[index],
+);
+const FLAT_EPIDERMIS_BASE = makeProfile(
+  (_x, index) => 0.915 + SURFACE_VARIATION[index] * 0.7,
+);
+const FLAT_DERMIS_BASE = makeProfile(
+  (x, index) => 0.05 + Math.sin(x * 2.2) * 0.025 + SURFACE_VARIATION[index] * 0.3,
+);
+const FAT_BASE = makeProfile((x) => -0.92 + Math.sin(x * 1.45) * 0.025);
+const FASCIA_BASE = makeProfile((x) => -1.075 + Math.sin(x * 1.7 + 0.5) * 0.018);
+const MUSCLE_BASE = makeProfile((x) => -1.62 + Math.sin(x * 1.1) * 0.018);
+
+const CLEFT_SURFACE = makeProfile((x, index) => {
+  const cleft = 1.12 * Math.exp(-(x * x) / 0.18);
+  return 1.045 + SURFACE_VARIATION[index] * 0.55 - cleft;
+});
+const CLEFT_EPIDERMIS_BASE = makeProfile((x, index) => {
+  const cleft = 1.09 * Math.exp(-(x * x) / 0.18);
+  return 0.91 + SURFACE_VARIATION[index] * 0.35 - cleft;
+});
+const CLEFT_DERMIS_BASE = makeProfile((x, index) => {
+  const cleft = 0.7 * Math.exp(-(x * x) / 0.31);
+  return 0.055 + SURFACE_VARIATION[index] * 0.2 - cleft;
+});
+
+const FOLD_SURFACE = makeProfile((x, index) => {
+  const leftFold = 0.21 * Math.exp(-((x + 0.72) ** 2) / 0.32);
+  const rightFold = 0.21 * Math.exp(-((x - 0.72) ** 2) / 0.32);
+  const valley = 0.18 * Math.exp(-(x * x) / 0.08);
+  return 1.035 + SURFACE_VARIATION[index] * 0.65 + leftFold + rightFold - valley;
+});
+const FOLD_EPIDERMIS_BASE = makeProfile((x, index) => {
+  const leftFold = 0.18 * Math.exp(-((x + 0.72) ** 2) / 0.35);
+  const rightFold = 0.18 * Math.exp(-((x - 0.72) ** 2) / 0.35);
+  const valley = 0.15 * Math.exp(-(x * x) / 0.1);
+  return 0.9 + SURFACE_VARIATION[index] * 0.42 + leftFold + rightFold - valley;
+});
+const FOLD_DERMIS_BASE = makeProfile(
+  (x, index) => 0.045 + Math.sin(x * 2) * 0.02 + SURFACE_VARIATION[index] * 0.15,
+);
+
+const JOINT_SURFACE = makeProfile(
+  (_x, index) => 1.05 + SURFACE_VARIATION[index] * 0.65,
+);
+const JOINT_EPIDERMIS_BASE = makeProfile(
+  (_x, index) => 0.92 + SURFACE_VARIATION[index] * 0.42,
+);
+const JOINT_DERMIS_BASE = makeProfile((x) => 0.49 + Math.sin(x * 1.6) * 0.02);
+const JOINT_FAT_BASE = makeProfile((x) => 0.18 + Math.sin(x * 1.35 + 0.4) * 0.018);
+
+function profileAt(profile: readonly ProfilePoint[], x: number) {
+  for (let index = 1; index < profile.length; index += 1) {
+    const left = profile[index - 1];
+    const right = profile[index];
+    if (x <= right[0]) {
+      const progress = (x - left[0]) / (right[0] - left[0]);
+      return MathUtils.lerp(left[1], right[1], MathUtils.clamp(progress, 0, 1));
+    }
+  }
+  return profile[profile.length - 1][1];
+}
+
+function TissueBand({
+  top,
+  bottom,
   color,
-  radius = 0.08,
-  roughness = 0.7,
+  roughness = 0.9,
 }: {
-  position: Point;
-  size: Point;
+  top: readonly ProfilePoint[];
+  bottom: readonly ProfilePoint[];
   color: string;
-  radius?: number;
   roughness?: number;
 }) {
+  const profileKey = `${top.flat().join(":")}|${bottom.flat().join(":")}`;
+  const shape = useMemo(() => {
+    const next = new Shape();
+    next.moveTo(top[0][0], top[0][1]);
+    top.slice(1).forEach(([x, y]) => next.lineTo(x, y));
+    [...bottom].reverse().forEach(([x, y]) => next.lineTo(x, y));
+    next.closePath();
+    return next;
+    // profileKey is a stable numeric representation of both contours.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profileKey]);
+  const extrusion = useMemo(
+    () => ({
+      depth: TISSUE_DEPTH,
+      steps: 1,
+      bevelEnabled: true,
+      bevelThickness: 0.018,
+      bevelSize: 0.014,
+      bevelSegments: 2,
+      curveSegments: 2,
+    }),
+    [],
+  );
+
   return (
-    <RoundedBox
-      args={[size[0], size[1], size[2]]}
-      position={position}
-      radius={radius}
-      smoothness={4}
-      castShadow
-      receiveShadow
-    >
-      <meshPhysicalMaterial
-        color={color}
-        roughness={roughness}
-        clearcoat={0.16}
-        clearcoatRoughness={0.65}
-      />
-    </RoundedBox>
+    <mesh position={[0, 0, -TISSUE_DEPTH / 2]} castShadow receiveShadow>
+      <extrudeGeometry args={[shape, extrusion]} />
+      <meshStandardMaterial color={color} roughness={roughness} metalness={0} />
+    </mesh>
   );
 }
 
-function FatLobules() {
-  const lobules = useMemo(
-    () =>
-      Array.from({ length: 17 }, (_, index) => {
-        const column = index % 9;
-        const row = Math.floor(index / 9);
-        return {
-          x: -2.28 + column * 0.57 + (row ? 0.22 : 0),
-          y: -0.63 + row * 0.28,
-          scale: 0.19 + ((index * 7) % 4) * 0.018,
-        };
+function DermalFibers({
+  top,
+  bottom,
+}: {
+  top: readonly ProfilePoint[];
+  bottom: readonly ProfilePoint[];
+}) {
+  const profileKey = `${top.flat().join(":")}|${bottom.flat().join(":")}`;
+  const paths = useMemo(() => {
+    const pathX = [-2.46, -1.72, -0.88, 0, 0.88, 1.72, 2.46];
+    return [0.23, 0.41, 0.59, 0.76].map((fraction, row) =>
+      pathX.map((x, index) => {
+        const low = profileAt(bottom, x);
+        const high = profileAt(top, x);
+        const wave = Math.sin(index * 1.7 + row * 0.9) * 0.018;
+        return [x, MathUtils.lerp(low, high, fraction) + wave, FRONT_Z + 0.014] as const;
       }),
-    [],
+    );
+    // profileKey is a stable numeric representation of both contours.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profileKey]);
+
+  return (
+    <group>
+      {paths.map((points, index) => (
+        <Tube
+          key={index}
+          points={points}
+          radius={index % 2 === 0 ? 0.012 : 0.009}
+          color={index % 2 === 0 ? "#71484d" : "#c2857d"}
+          opacity={0.28}
+          radialSegments={5}
+          tubularSegments={22}
+        />
+      ))}
+    </group>
   );
+}
+
+function SkinSurfaceDetail({ surface }: { surface: readonly ProfilePoint[] }) {
+  const poreX = [-2.32, -1.78, -1.19, -0.72, 0.65, 1.18, 1.76, 2.31];
+  const relief = [
+    [-2.18, -0.86], [-1.72, 0.18], [-1.26, 0.84], [-0.82, -0.36], [-0.4, 0.52],
+    [0.38, -0.78], [0.74, 0.18], [1.16, 0.88], [1.62, -0.42], [2.08, 0.44],
+  ] as const;
+  return (
+    <group>
+      {relief.map(([x, z], index) => (
+        <mesh
+          key={`${x}-${z}`}
+          position={[x, profileAt(surface, x) + 0.008, z]}
+          rotation={[0, (index * 0.71) % Math.PI, 0]}
+          scale={[0.22 + (index % 3) * 0.035, 0.018 + (index % 2) * 0.006, 0.15 + (index % 4) * 0.018]}
+        >
+          <sphereGeometry args={[1, 12, 7]} />
+          <meshStandardMaterial color={index % 3 === 0 ? "#a97566" : "#c08b75"} roughness={1} />
+        </mesh>
+      ))}
+      {poreX.map((x, index) => (
+        <mesh
+          key={x}
+          position={[x, profileAt(surface, x) - 0.015, FRONT_Z + 0.025]}
+          scale={[0.038 + (index % 3) * 0.006, 0.018, 0.012]}
+        >
+          <sphereGeometry args={[1, 10, 7]} />
+          <meshStandardMaterial color="#704d47" roughness={1} />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
+function FatLobules({ top }: { top: readonly ProfilePoint[] }) {
+  const topKey = top.flat().join(":");
+  const lobules = useMemo(() => {
+    const rowY = [-0.16, -0.46, -0.76];
+    return Array.from({ length: 30 }, (_, index) => {
+      const column = index % 10;
+      const row = Math.floor(index / 10);
+      const x = -2.42 + column * 0.54 + (row % 2 ? 0.18 : -0.03);
+      const y = rowY[row] + Math.sin(index * 1.83) * 0.045;
+      const sx = 0.2 + ((index * 7) % 5) * 0.012;
+      const sy = 0.15 + ((index * 11) % 4) * 0.014;
+      return { x, y, sx, sy, visible: y + sy < profileAt(top, x) + 0.055 };
+    }).filter((item) => item.visible);
+    // topKey is a stable numeric representation of the fat boundary.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [topKey]);
 
   return (
     <group>
       {lobules.map((item, index) => (
         <mesh
           key={`${item.x}-${item.y}`}
-          position={[item.x, item.y, 1.47]}
-          scale={[item.scale * 1.25, item.scale, 0.11]}
+          position={[item.x, item.y, FRONT_Z + 0.012]}
+          rotation={[0, 0, Math.sin(index * 2.1) * 0.34]}
+          scale={[item.sx * 1.28, item.sy, 0.075 + (index % 3) * 0.009]}
           castShadow
         >
-          <sphereGeometry args={[1, 16, 12]} />
-          <meshPhysicalMaterial
-            color={index % 3 === 0 ? "#edcb79" : COLORS.fat}
-            roughness={0.55}
-            clearcoat={0.2}
+          <sphereGeometry args={[1, 12, 8]} />
+          <meshStandardMaterial
+            color={index % 4 === 0 ? "#c2a261" : index % 3 === 0 ? "#a9854a" : COLORS.fat}
+            roughness={0.94}
+            metalness={0}
           />
         </mesh>
       ))}
@@ -217,13 +397,28 @@ function FatLobules() {
 }
 
 function MuscleStriations() {
+  const fibers = useMemo(
+    () =>
+      [-2.55, -1.88, -1.2, -0.53, 0.14, 0.81, 1.48, 2.15].map((x, index) => [
+        [x, -1.56, FRONT_Z + 0.015],
+        [x + 0.18, -1.46 + Math.sin(index) * 0.015, FRONT_Z + 0.018],
+        [x + 0.38, -1.34 + Math.cos(index) * 0.012, FRONT_Z + 0.016],
+        [x + 0.62, -1.16, FRONT_Z + 0.014],
+      ] as readonly Point[]),
+    [],
+  );
   return (
-    <group position={[0, -1.37, 1.46]}>
-      {[-2.1, -1.4, -0.7, 0, 0.7, 1.4, 2.1].map((x) => (
-        <mesh key={x} position={[x, 0, 0]} rotation={[0, 0, -0.5]}>
-          <boxGeometry args={[0.035, 0.5, 0.025]} />
-          <meshBasicMaterial color="#b66e6c" transparent opacity={0.45} />
-        </mesh>
+    <group>
+      {fibers.map((points, index) => (
+        <Tube
+          key={index}
+          points={points}
+          radius={0.018}
+          color={index % 2 === 0 ? "#9a595b" : "#b1706d"}
+          opacity={0.34}
+          radialSegments={5}
+          tubularSegments={16}
+        />
       ))}
     </group>
   );
@@ -237,13 +432,15 @@ type TissueBaseProps = {
 function FlatTissue({ showLabels }: { showLabels: boolean }) {
   return (
     <group>
-      <SoftLayer position={[0, 0.94, 0]} size={[5.4, 0.3, 2.8]} color={COLORS.epidermis} radius={0.13} />
-      <SoftLayer position={[0, 0.28, 0]} size={[5.4, 1.02, 2.8]} color={COLORS.dermis} />
-      <SoftLayer position={[0, -0.63, 0]} size={[5.4, 0.72, 2.8]} color={COLORS.fat} />
-      <SoftLayer position={[0, -1.05, 0]} size={[5.4, 0.14, 2.8]} color={COLORS.fascia} radius={0.04} />
-      <SoftLayer position={[0, -1.38, 0]} size={[5.4, 0.5, 2.8]} color={COLORS.muscle} />
-      <FatLobules />
+      <TissueBand top={FLAT_SURFACE} bottom={FLAT_EPIDERMIS_BASE} color={COLORS.epidermis} roughness={0.96} />
+      <TissueBand top={FLAT_EPIDERMIS_BASE} bottom={FLAT_DERMIS_BASE} color={COLORS.dermis} roughness={0.93} />
+      <TissueBand top={FLAT_DERMIS_BASE} bottom={FAT_BASE} color="#9b7947" roughness={0.98} />
+      <TissueBand top={FAT_BASE} bottom={FASCIA_BASE} color={COLORS.fascia} roughness={0.91} />
+      <TissueBand top={FASCIA_BASE} bottom={MUSCLE_BASE} color={COLORS.muscle} roughness={0.96} />
+      <DermalFibers top={FLAT_EPIDERMIS_BASE} bottom={FLAT_DERMIS_BASE} />
+      <FatLobules top={FLAT_DERMIS_BASE} />
       <MuscleStriations />
+      <SkinSurfaceDetail surface={FLAT_SURFACE} />
       {showLabels && (
         <>
           <SceneLabel position={[-3.02, 0.96, 1.25]} title="Epidermis" />
@@ -258,23 +455,31 @@ function FlatTissue({ showLabels }: { showLabels: boolean }) {
 function CleftTissue({ showLabels }: { showLabels: boolean }) {
   return (
     <group>
-      <group rotation={[0, 0, -0.085]} position={[-1.42, -0.02, 0]}>
-        <SoftLayer position={[0, 0.94, 0]} size={[2.58, 0.3, 2.8]} color={COLORS.epidermis} radius={0.13} />
-        <SoftLayer position={[0, 0.28, 0]} size={[2.58, 1.02, 2.8]} color={COLORS.dermis} />
-      </group>
-      <group rotation={[0, 0, 0.085]} position={[1.42, -0.02, 0]}>
-        <SoftLayer position={[0, 0.94, 0]} size={[2.58, 0.3, 2.8]} color={COLORS.epidermis} radius={0.13} />
-        <SoftLayer position={[0, 0.28, 0]} size={[2.58, 1.02, 2.8]} color={COLORS.dermis} />
-      </group>
-      <SoftLayer position={[0, -0.63, 0]} size={[5.4, 0.72, 2.8]} color={COLORS.fat} />
-      <SoftLayer position={[0, -1.05, 0]} size={[5.4, 0.14, 2.8]} color={COLORS.fascia} radius={0.04} />
-      <SoftLayer position={[0, -1.38, 0]} size={[5.4, 0.5, 2.8]} color={COLORS.muscle} />
-      <FatLobules />
+      <TissueBand top={CLEFT_SURFACE} bottom={CLEFT_EPIDERMIS_BASE} color={COLORS.epidermis} roughness={0.97} />
+      <TissueBand top={CLEFT_EPIDERMIS_BASE} bottom={CLEFT_DERMIS_BASE} color={COLORS.dermis} roughness={0.94} />
+      <TissueBand top={CLEFT_DERMIS_BASE} bottom={FAT_BASE} color="#997746" roughness={0.98} />
+      <TissueBand top={FAT_BASE} bottom={FASCIA_BASE} color={COLORS.fascia} roughness={0.92} />
+      <TissueBand top={FASCIA_BASE} bottom={MUSCLE_BASE} color={COLORS.muscle} roughness={0.96} />
+      <DermalFibers top={CLEFT_EPIDERMIS_BASE} bottom={CLEFT_DERMIS_BASE} />
+      <FatLobules top={CLEFT_DERMIS_BASE} />
       <MuscleStriations />
-      <mesh position={[0, 0.54, 1.46]} scale={[0.2, 0.52, 0.08]}>
-        <sphereGeometry args={[1, 20, 16]} />
-        <meshStandardMaterial color="#6c4749" roughness={0.86} />
-      </mesh>
+      <SkinSurfaceDetail surface={CLEFT_SURFACE} />
+      <Tube
+        points={[
+          [-0.88, 1, FRONT_Z + 0.02],
+          [-0.55, 0.86, FRONT_Z + 0.025],
+          [-0.3, 0.36, FRONT_Z + 0.03],
+          [0, -0.07, FRONT_Z + 0.032],
+          [0.3, 0.36, FRONT_Z + 0.03],
+          [0.55, 0.86, FRONT_Z + 0.025],
+          [0.88, 1, FRONT_Z + 0.02],
+        ]}
+        radius={0.026}
+        color="#5e3b3e"
+        opacity={0.72}
+        radialSegments={6}
+        tubularSegments={28}
+      />
       {showLabels && (
         <>
           <SceneLabel position={[-3.04, 0.96, 1.25]} title="Skin surface" />
@@ -289,15 +494,15 @@ function CleftTissue({ showLabels }: { showLabels: boolean }) {
 function FoldTissue({ showLabels }: { showLabels: boolean }) {
   return (
     <group>
-      <FlatTissue showLabels={false} />
-      <mesh position={[-0.58, 1.01, 0.18]} rotation={[0, 0, -0.22]} scale={[1.55, 0.24, 1.18]}>
-        <sphereGeometry args={[1, 32, 20]} />
-        <meshPhysicalMaterial color={COLORS.epidermis} roughness={0.58} clearcoat={0.18} />
-      </mesh>
-      <mesh position={[0.62, 1.01, 0.18]} rotation={[0, 0, 0.22]} scale={[1.55, 0.24, 1.18]}>
-        <sphereGeometry args={[1, 32, 20]} />
-        <meshPhysicalMaterial color={COLORS.epidermis} roughness={0.58} clearcoat={0.18} />
-      </mesh>
+      <TissueBand top={FOLD_SURFACE} bottom={FOLD_EPIDERMIS_BASE} color={COLORS.epidermis} roughness={0.96} />
+      <TissueBand top={FOLD_EPIDERMIS_BASE} bottom={FOLD_DERMIS_BASE} color={COLORS.dermis} roughness={0.94} />
+      <TissueBand top={FOLD_DERMIS_BASE} bottom={FAT_BASE} color="#997746" roughness={0.98} />
+      <TissueBand top={FAT_BASE} bottom={FASCIA_BASE} color={COLORS.fascia} roughness={0.92} />
+      <TissueBand top={FASCIA_BASE} bottom={MUSCLE_BASE} color={COLORS.muscle} roughness={0.96} />
+      <DermalFibers top={FOLD_EPIDERMIS_BASE} bottom={FOLD_DERMIS_BASE} />
+      <FatLobules top={FOLD_DERMIS_BASE} />
+      <MuscleStriations />
+      <SkinSurfaceDetail surface={FOLD_SURFACE} />
       {showLabels && (
         <>
           <SceneLabel position={[-3.02, 0.96, 1.25]} title="Hair-bearing fold skin" />
@@ -312,27 +517,29 @@ function FoldTissue({ showLabels }: { showLabels: boolean }) {
 function JointTissue({ showLabels }: { showLabels: boolean }) {
   return (
     <group>
-      <SoftLayer position={[0, 1.02, 0]} size={[5.4, 0.26, 2.8]} color={COLORS.epidermis} radius={0.13} />
-      <SoftLayer position={[0, 0.61, 0]} size={[5.4, 0.52, 2.8]} color={COLORS.dermis} />
-      <SoftLayer position={[0, 0.19, 0]} size={[5.4, 0.28, 2.8]} color="#d8b077" />
+      <TissueBand top={JOINT_SURFACE} bottom={JOINT_EPIDERMIS_BASE} color={COLORS.epidermis} roughness={0.96} />
+      <TissueBand top={JOINT_EPIDERMIS_BASE} bottom={JOINT_DERMIS_BASE} color={COLORS.dermis} roughness={0.94} />
+      <TissueBand top={JOINT_DERMIS_BASE} bottom={JOINT_FAT_BASE} color="#a2804c" roughness={0.98} />
+      <DermalFibers top={JOINT_EPIDERMIS_BASE} bottom={JOINT_DERMIS_BASE} />
+      <SkinSurfaceDetail surface={JOINT_SURFACE} />
       <mesh position={[-0.82, -0.52, 0.05]} rotation={[0, 0, Math.PI / 2]} castShadow>
         <capsuleGeometry args={[0.4, 1.2, 12, 24]} />
-        <meshPhysicalMaterial color={COLORS.joint} roughness={0.45} clearcoat={0.3} />
+        <meshStandardMaterial color={COLORS.joint} roughness={0.82} metalness={0} />
       </mesh>
       <mesh position={[0.82, -0.52, 0.05]} rotation={[0, 0, Math.PI / 2]} castShadow>
         <capsuleGeometry args={[0.4, 1.2, 12, 24]} />
-        <meshPhysicalMaterial color={COLORS.joint} roughness={0.45} clearcoat={0.3} />
+        <meshStandardMaterial color={COLORS.joint} roughness={0.82} metalness={0} />
       </mesh>
       <mesh position={[0, -0.52, 0.02]} scale={[0.55, 0.47, 0.78]}>
         <sphereGeometry args={[1, 28, 20]} />
-        <meshPhysicalMaterial color="#769aa1" roughness={0.34} transparent opacity={0.85} />
+        <meshStandardMaterial color="#687f83" roughness={0.76} transparent opacity={0.82} />
       </mesh>
       <Tube
         points={[
-          [-2.3, -0.05, 1.46],
-          [-0.8, 0.04, 1.5],
-          [0.8, -0.02, 1.5],
-          [2.3, 0.08, 1.46],
+          [-2.3, -0.05, FRONT_Z + 0.01],
+          [-0.8, 0.04, FRONT_Z + 0.015],
+          [0.8, -0.02, FRONT_Z + 0.015],
+          [2.3, 0.08, FRONT_Z + 0.01],
         ]}
         radius={0.11}
         color={COLORS.tendon}
@@ -355,16 +562,16 @@ function TissueBase({ showLabels, variant = "flat" }: TissueBaseProps) {
   return <FlatTissue showLabels={showLabels} />;
 }
 
-function SebaceousGland({ x = 0, z = 1.54 }: { x?: number; z?: number }) {
+function SebaceousGland({ x = 0, z = FRONT_Z + 0.015 }: { x?: number; z?: number }) {
   return (
     <group position={[x + 0.24, 0.38, z]}>
       <mesh position={[0.05, 0.05, 0]} scale={[0.18, 0.24, 0.09]}>
         <sphereGeometry args={[1, 18, 14]} />
-        <meshPhysicalMaterial color={COLORS.sebum} roughness={0.48} />
+        <meshStandardMaterial color={COLORS.sebum} roughness={0.9} />
       </mesh>
       <mesh position={[0.25, -0.02, 0]} scale={[0.16, 0.2, 0.085]}>
         <sphereGeometry args={[1, 18, 14]} />
-        <meshPhysicalMaterial color="#dc9f77" roughness={0.48} />
+        <meshStandardMaterial color="#a9755d" roughness={0.92} />
       </mesh>
       <Tube
         points={[
@@ -384,25 +591,25 @@ function Follicle({ x = 0, hair = true }: { x?: number; hair?: boolean }) {
     <group>
       <Tube
         points={[
-          [x, 1.02, 1.5],
-          [x + 0.02, 0.56, 1.51],
-          [x + 0.08, 0.08, 1.52],
-          [x + 0.04, -0.22, 1.52],
+          [x, 1.02, FRONT_Z + 0.025],
+          [x + 0.02, 0.56, FRONT_Z + 0.028],
+          [x + 0.08, 0.08, FRONT_Z + 0.03],
+          [x + 0.04, -0.22, FRONT_Z + 0.028],
         ]}
         radius={0.105}
         color={COLORS.follicle}
       />
-      <mesh position={[x + 0.04, -0.23, 1.52]} scale={[0.15, 0.2, 0.09]}>
+      <mesh position={[x + 0.04, -0.23, FRONT_Z + 0.025]} scale={[0.15, 0.2, 0.075]}>
         <sphereGeometry args={[1, 20, 14]} />
-        <meshPhysicalMaterial color="#6f4546" roughness={0.62} />
+        <meshStandardMaterial color="#56383b" roughness={0.94} />
       </mesh>
       {hair && (
         <Tube
           points={[
-            [x + 0.04, -0.2, 1.63],
-            [x + 0.01, 0.42, 1.63],
-            [x - 0.05, 1.08, 1.63],
-            [x - 0.18, 1.55, 1.63],
+            [x + 0.04, -0.2, FRONT_Z + 0.07],
+            [x + 0.01, 0.42, FRONT_Z + 0.07],
+            [x - 0.05, 1.08, FRONT_Z + 0.07],
+            [x - 0.18, 1.55, FRONT_Z + 0.07],
           ]}
           radius={0.028}
           color={COLORS.hair}
@@ -424,18 +631,27 @@ function InflammationHalo({
   opacity?: number;
 }) {
   return (
-    <mesh position={position} scale={scale}>
-      <sphereGeometry args={[1, 32, 24]} />
-      <meshPhysicalMaterial
-        color={COLORS.inflammation}
-        emissive={COLORS.inflammation}
-        emissiveIntensity={0.14}
-        roughness={0.45}
-        transparent
-        opacity={opacity}
-        depthWrite={false}
-      />
-    </mesh>
+    <group position={position} scale={scale}>
+      <mesh rotation={[0.14, -0.1, 0.2]} scale={[1, 0.92, 0.72]}>
+        <icosahedronGeometry args={[1, 3]} />
+        <meshStandardMaterial
+          color={COLORS.inflammation}
+          roughness={1}
+          metalness={0}
+          transparent
+          opacity={opacity}
+          depthWrite={false}
+        />
+      </mesh>
+      <mesh position={[-0.38, 0.16, 0.14]} scale={[0.34, 0.29, 0.3]}>
+        <dodecahedronGeometry args={[1, 1]} />
+        <meshStandardMaterial color="#8e4443" roughness={1} transparent opacity={Math.min(0.5, opacity + 0.12)} />
+      </mesh>
+      <mesh position={[0.31, -0.2, 0.12]} scale={[0.28, 0.24, 0.27]}>
+        <dodecahedronGeometry args={[1, 1]} />
+        <meshStandardMaterial color="#c36859" roughness={1} transparent opacity={Math.min(0.46, opacity + 0.08)} />
+      </mesh>
+    </group>
   );
 }
 
@@ -447,10 +663,10 @@ function IngrownHairScene({ stage, showLabels }: SceneProps) {
       <AnimatedGroup target={stage === 0 ? 1 : 0.001}>
         <Tube
           points={[
-            [0.04, -0.2, 1.63],
-            [0.01, 0.42, 1.63],
-            [-0.05, 1.08, 1.63],
-            [-0.18, 1.55, 1.63],
+            [0.04, -0.2, FRONT_Z + 0.07],
+            [0.01, 0.42, FRONT_Z + 0.07],
+            [-0.05, 1.08, FRONT_Z + 0.07],
+            [-0.18, 1.55, FRONT_Z + 0.07],
           ]}
           radius={0.028}
           color={COLORS.hair}
@@ -460,19 +676,19 @@ function IngrownHairScene({ stage, showLabels }: SceneProps) {
       <AnimatedGroup target={stage > 0 ? 1 : 0.001}>
         <Tube
           points={[
-            [0.04, -0.2, 1.63],
-            [0.01, 0.42, 1.63],
-            [-0.05, 1.04, 1.63],
-            [0.22, 1.34, 1.63],
-            [0.7, 1.22, 1.63],
-            [0.48, 0.93, 1.63],
+            [0.04, -0.2, FRONT_Z + 0.07],
+            [0.01, 0.42, FRONT_Z + 0.07],
+            [-0.05, 1.04, FRONT_Z + 0.07],
+            [0.22, 1.34, FRONT_Z + 0.07],
+            [0.7, 1.22, FRONT_Z + 0.07],
+            [0.48, 0.93, FRONT_Z + 0.07],
           ]}
           radius={0.03}
           color={COLORS.hair}
           radialSegments={7}
         />
       </AnimatedGroup>
-      <AnimatedGroup target={stage === 2 ? 1 : 0.001} position={[0.46, 0.91, 1.48]}>
+      <AnimatedGroup target={stage === 2 ? 1 : 0.001} position={[0.46, 0.91, FRONT_Z - 0.055]}>
         <InflammationHalo position={[0, 0, 0]} scale={[0.52, 0.34, 0.18]} />
       </AnimatedGroup>
       {showLabels && (
@@ -493,13 +709,13 @@ function FolliculitisScene({ stage, showLabels }: SceneProps) {
     <group>
       <TissueBase showLabels={showLabels} />
       <Follicle />
-      <AnimatedGroup target={stage > 0 ? haloScale : 0.001} position={[0.03, 0.39, 1.5]}>
+      <AnimatedGroup target={stage > 0 ? haloScale : 0.001} position={[0.03, 0.39, FRONT_Z - 0.045]}>
         <InflammationHalo position={[0, 0, 0]} scale={[0.48, 0.72, 0.16]} />
       </AnimatedGroup>
-      <AnimatedGroup target={stage === 2 ? 1 : 0.001} position={[-0.04, 1.13, 1.53]}>
-        <mesh scale={[0.24, 0.13, 0.12]}>
+      <AnimatedGroup target={stage === 2 ? 1 : 0.001} position={[-0.04, 1.13, FRONT_Z + 0.01]}>
+        <mesh scale={[0.24, 0.13, 0.075]}>
           <sphereGeometry args={[1, 24, 18]} />
-          <meshPhysicalMaterial color="#f3c88f" roughness={0.46} clearcoat={0.25} />
+          <meshStandardMaterial color="#c3a06f" roughness={0.9} />
         </mesh>
       </AnimatedGroup>
       {showLabels && stage > 0 && (
@@ -520,27 +736,15 @@ function AbscessScene({ stage, showLabels }: SceneProps) {
     <group>
       <TissueBase showLabels={showLabels} />
       <Follicle x={-0.2} />
-      <AnimatedGroup target={stage > 0 ? size : 0.001} position={[0.16, 0.05, 1.46]}>
-        <InflammationHalo position={[0, 0, -0.02]} scale={[0.92, 0.83, 0.23]} opacity={0.3} />
-        <mesh scale={[0.6, 0.55, 0.18]}>
-          <sphereGeometry args={[1, 32, 24]} />
-          <meshPhysicalMaterial
-            color={COLORS.fluid}
-            roughness={0.3}
-            clearcoat={0.4}
-            transparent
-            opacity={0.92}
-          />
+      <AnimatedGroup target={stage > 0 ? size : 0.001} position={[0.16, 0.05, FRONT_Z - 0.07]}>
+        <InflammationHalo position={[0, 0, -0.03]} scale={[0.92, 0.83, 0.19]} opacity={0.25} />
+        <mesh rotation={[0.08, -0.16, 0.12]} scale={[0.64, 0.58, 0.13]}>
+          <icosahedronGeometry args={[1, 3]} />
+          <meshStandardMaterial color="#7e4d48" roughness={0.98} transparent opacity={0.78} />
         </mesh>
-        <mesh scale={[0.68, 0.63, 0.2]}>
-          <sphereGeometry args={[1, 32, 24]} />
-          <meshPhysicalMaterial
-            color="#f08a73"
-            roughness={0.5}
-            transparent
-            opacity={0.24}
-            depthWrite={false}
-          />
+        <mesh rotation={[-0.06, 0.1, -0.08]} scale={[0.53, 0.47, 0.115]} position={[0.02, -0.01, 0.025]}>
+          <icosahedronGeometry args={[1, 3]} />
+          <meshStandardMaterial color={COLORS.fluid} roughness={0.86} />
         </mesh>
       </AnimatedGroup>
       {showLabels && stage > 0 && (
@@ -565,25 +769,24 @@ function EpidermoidScene({ stage, showLabels }: SceneProps) {
     <group>
       <TissueBase showLabels={showLabels} />
       <Follicle x={-0.72} />
-      <AnimatedGroup target={stage > 0 ? size : 0.001} position={[0.35, -0.12, 1.47]}>
-        <mesh scale={[0.78, 0.66, 0.22]}>
-          <sphereGeometry args={[1, 40, 28]} />
-          <meshPhysicalMaterial
+      <AnimatedGroup target={stage > 0 ? size : 0.001} position={[0.35, -0.12, FRONT_Z - 0.065]}>
+        <mesh rotation={[0.05, -0.12, 0.08]} scale={[0.78, 0.66, 0.15]}>
+          <icosahedronGeometry args={[1, 4]} />
+          <meshStandardMaterial
             color={COLORS.cyst}
-            roughness={0.32}
-            clearcoat={0.45}
+            roughness={0.94}
             transparent
-            opacity={0.66}
+            opacity={0.58}
             depthWrite={false}
           />
         </mesh>
-        <mesh scale={[0.67, 0.56, 0.2]}>
-          <sphereGeometry args={[1, 36, 24]} />
-          <meshPhysicalMaterial color="#eadfca" roughness={0.74} />
+        <mesh rotation={[-0.04, 0.08, -0.06]} scale={[0.65, 0.54, 0.125]}>
+          <icosahedronGeometry args={[1, 3]} />
+          <meshStandardMaterial color="#c5b9a6" roughness={0.98} />
         </mesh>
         {pearls.map((position) => (
           <mesh key={position.join(":")} position={position} scale={[0.16, 0.11, 0.07]}>
-            <sphereGeometry args={[1, 18, 12]} />
+            <dodecahedronGeometry args={[1, 1]} />
             <meshStandardMaterial color="#cdbca6" roughness={0.85} />
           </mesh>
         ))}
@@ -602,9 +805,9 @@ function EpidermoidScene({ stage, showLabels }: SceneProps) {
 
 function PilonidalScene({ stage, showLabels }: SceneProps) {
   const looseHairs = [
-    [[-0.06, 0.98, 1.61], [0.05, 0.56, 1.61], [0.22, 0.2, 1.61]],
-    [[0.08, 0.89, 1.64], [-0.03, 0.48, 1.64], [0.28, -0.05, 1.64]],
-    [[-0.13, 0.7, 1.67], [0.12, 0.3, 1.67], [0.34, -0.22, 1.67]],
+    [[-0.42, 0.62, FRONT_Z + 0.065], [-0.08, 0.08, FRONT_Z + 0.07], [0.18, -0.35, FRONT_Z + 0.065]],
+    [[0.38, 0.52, FRONT_Z + 0.08], [0.04, 0.02, FRONT_Z + 0.082], [0.26, -0.5, FRONT_Z + 0.075]],
+    [[-0.3, 0.36, FRONT_Z + 0.095], [0.08, -0.05, FRONT_Z + 0.09], [0.32, -0.62, FRONT_Z + 0.086]],
   ] as const;
   return (
     <group>
@@ -612,23 +815,24 @@ function PilonidalScene({ stage, showLabels }: SceneProps) {
       <AnimatedGroup target={stage > 0 ? 1 : 0.001}>
         <Tube
           points={[
-            [0, 0.91, 1.57],
-            [0.02, 0.44, 1.58],
-            [0.13, 0.02, 1.58],
-            [0.39, -0.35, 1.58],
+            [0, -0.06, FRONT_Z + 0.018],
+            [0.02, -0.27, FRONT_Z + 0.02],
+            [0.13, -0.52, FRONT_Z + 0.022],
+            [0.39, -0.76, FRONT_Z + 0.02],
           ]}
-          radius={0.15}
-          color="#865657"
+          radius={0.105}
+          color="#704247"
+          radialSegments={7}
         />
         {looseHairs.map((points, index) => (
           <Tube key={index} points={points} radius={0.024} color={COLORS.hair} radialSegments={6} />
         ))}
       </AnimatedGroup>
-      <AnimatedGroup target={stage === 2 ? 1 : 0.001} position={[0.3, -0.23, 1.48]}>
-        <InflammationHalo position={[0, 0, 0]} scale={[0.86, 0.68, 0.23]} opacity={0.36} />
-        <mesh scale={[0.43, 0.34, 0.16]}>
-          <sphereGeometry args={[1, 28, 20]} />
-          <meshPhysicalMaterial color={COLORS.fluid} roughness={0.38} />
+      <AnimatedGroup target={stage === 2 ? 1 : 0.001} position={[0.3, -0.64, FRONT_Z - 0.055]}>
+        <InflammationHalo position={[0, 0, 0]} scale={[0.82, 0.58, 0.18]} opacity={0.3} />
+        <mesh rotation={[0.1, 0.05, -0.12]} scale={[0.41, 0.31, 0.11]}>
+          <icosahedronGeometry args={[1, 3]} />
+          <meshStandardMaterial color={COLORS.fluid} roughness={0.9} />
         </mesh>
       </AnimatedGroup>
       {showLabels && stage > 0 && (
@@ -649,43 +853,43 @@ function HidradenitisScene({ stage, showLabels }: SceneProps) {
       <Follicle x={-1.1} />
       <Follicle x={0.05} />
       <Follicle x={1.12} />
-      <AnimatedGroup target={stage > 0 ? noduleScale : 0.001} position={[-0.72, -0.02, 1.49]}>
-        <InflammationHalo position={[0, 0, 0]} scale={[0.73, 0.62, 0.2]} opacity={0.34} />
-        <mesh scale={[0.42, 0.38, 0.16]}>
-          <sphereGeometry args={[1, 28, 20]} />
-          <meshPhysicalMaterial color="#d9a172" roughness={0.4} />
+      <AnimatedGroup target={stage > 0 ? noduleScale : 0.001} position={[-0.72, -0.02, FRONT_Z - 0.055]}>
+        <InflammationHalo position={[0, 0, 0]} scale={[0.73, 0.62, 0.17]} opacity={0.28} />
+        <mesh rotation={[0.1, -0.08, 0.14]} scale={[0.42, 0.38, 0.105]}>
+          <icosahedronGeometry args={[1, 3]} />
+          <meshStandardMaterial color="#a87359" roughness={0.94} />
         </mesh>
       </AnimatedGroup>
       <AnimatedGroup target={stage === 2 ? 1 : 0.001}>
-        <InflammationHalo position={[1.02, -0.16, 1.49]} scale={[0.72, 0.58, 0.2]} opacity={0.32} />
+        <InflammationHalo position={[1.02, -0.16, FRONT_Z - 0.055]} scale={[0.72, 0.58, 0.17]} opacity={0.27} />
         <Tube
           points={[
-            [-0.72, -0.06, 1.62],
-            [-0.18, -0.42, 1.62],
-            [0.48, -0.38, 1.62],
-            [1.02, -0.15, 1.62],
+            [-0.72, -0.06, FRONT_Z + 0.025],
+            [-0.18, -0.42, FRONT_Z + 0.026],
+            [0.48, -0.38, FRONT_Z + 0.026],
+            [1.02, -0.15, FRONT_Z + 0.025],
           ]}
-          radius={0.12}
-          color="#9a565e"
+          radius={0.095}
+          color="#75434b"
         />
-        <mesh position={[1.02, -0.16, 1.55]} scale={[0.42, 0.34, 0.15]}>
-          <sphereGeometry args={[1, 28, 20]} />
-          <meshPhysicalMaterial color="#d59a70" roughness={0.42} />
+        <mesh position={[1.02, -0.16, FRONT_Z - 0.025]} rotation={[-0.08, 0.06, 0.12]} scale={[0.42, 0.34, 0.1]}>
+          <icosahedronGeometry args={[1, 3]} />
+          <meshStandardMaterial color="#a26c55" roughness={0.95} />
         </mesh>
         <Tube
           points={[
-            [-1.42, 1.18, 1.58],
-            [-0.95, 1.11, 1.6],
-            [-0.48, 1.18, 1.58],
+            [-1.42, 1.18, FRONT_Z + 0.055],
+            [-0.95, 1.11, FRONT_Z + 0.06],
+            [-0.48, 1.18, FRONT_Z + 0.055],
           ]}
           radius={0.035}
           color="#b07377"
         />
         <Tube
           points={[
-            [0.48, 1.17, 1.58],
-            [0.92, 1.09, 1.6],
-            [1.42, 1.16, 1.58],
+            [0.48, 1.17, FRONT_Z + 0.055],
+            [0.92, 1.09, FRONT_Z + 0.06],
+            [1.42, 1.16, FRONT_Z + 0.055],
           ]}
           radius={0.035}
           color="#b07377"
@@ -708,7 +912,7 @@ function GanglionScene({ stage, showLabels }: SceneProps) {
   return (
     <group>
       <TissueBase showLabels={showLabels} variant="joint" />
-      <AnimatedGroup target={stage > 0 ? size : 0.001} position={[0.45, 0.36, 1.49]}>
+      <AnimatedGroup target={stage > 0 ? size : 0.001} position={[0.45, 0.36, FRONT_Z - 0.04]}>
         <Tube
           points={[
             [0, -0.47, 0],
@@ -716,25 +920,16 @@ function GanglionScene({ stage, showLabels }: SceneProps) {
             [0, -0.06, 0],
           ]}
           radius={0.1}
-          color="#81bdd3"
-          opacity={0.9}
+          color="#6f959d"
+          opacity={0.82}
         />
-        <mesh position={[0.04, 0.3, 0]} scale={[0.72, 0.56, 0.24]}>
-          <sphereGeometry args={[1, 40, 28]} />
-          <meshPhysicalMaterial
-            color="#7fc8e6"
-            emissive="#235566"
-            emissiveIntensity={0.18}
-            roughness={0.2}
-            clearcoat={0.55}
-            transparent
-            opacity={0.78}
-            depthWrite={false}
-          />
+        <mesh position={[0.04, 0.3, 0]} rotation={[0.08, -0.12, 0.1]} scale={[0.72, 0.56, 0.16]}>
+          <icosahedronGeometry args={[1, 4]} />
+          <meshStandardMaterial color="#668e98" roughness={0.8} transparent opacity={0.7} depthWrite={false} />
         </mesh>
-        <mesh position={[0.04, 0.3, -0.015]} scale={[0.58, 0.43, 0.2]}>
-          <sphereGeometry args={[1, 32, 24]} />
-          <meshPhysicalMaterial color="#bde9f0" roughness={0.28} transparent opacity={0.52} />
+        <mesh position={[0.04, 0.3, 0.01]} rotation={[-0.04, 0.08, -0.06]} scale={[0.57, 0.42, 0.125]}>
+          <icosahedronGeometry args={[1, 3]} />
+          <meshStandardMaterial color="#9eb9b9" roughness={0.84} transparent opacity={0.48} />
         </mesh>
       </AnimatedGroup>
       {showLabels && stage > 0 && (
@@ -777,4 +972,3 @@ export function ProceduralCutawayScene({
       return <GanglionScene stage={stage} showLabels={showLabels} />;
   }
 }
-
