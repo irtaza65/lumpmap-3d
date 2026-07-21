@@ -20,7 +20,7 @@ interpretation, and deterministic care guidance.
 
 **Primary Codex session ID:** `019f83ba-d355-7490-a9b2-464a168f195b`
 
-**Live application:** https://lumpmap-3d.nn3834428256300.chatgpt.site/
+**Live application:** https://lumpmap3d.vercel.app/
 
 **Repository:** https://github.com/irtaza65/lumpmap-3d
 
@@ -38,8 +38,7 @@ interpretation, and deterministic care guidance.
 - Zod
 - Motion
 - Vitest
-- Cloudflare Workers
-- Vinext
+- Vercel
 
 ## About the project
 
@@ -148,7 +147,7 @@ motion, constrained camera behavior, and a non-WebGL fallback.
 - Deterministic protection for emergency and same-day red-flag patterns.
 - A Visit Note that cannot acquire a diagnosis or an unprovided symptom.
 - No accounts, trackers, uploads, saved health history, or exposed API key.
-- 32 focused product tests plus 24 API and safety tests.
+- 33 focused product tests plus 24 API and safety tests.
 - Verified production build and responsive browser QA.
 
 ### What I learned

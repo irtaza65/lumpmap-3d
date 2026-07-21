@@ -16,7 +16,7 @@ working application, tests, procedural 3D scenes, and deployment package.
 
 - **Track:** Apps for Your Life
 - **Primary Codex build thread:** `019f83ba-d355-7490-a9b2-464a168f195b`
-- **Public application:** [lumpmap-3d.nn3834428256300.chatgpt.site](https://lumpmap-3d.nn3834428256300.chatgpt.site/)
+- **Public application:** [lumpmap3d.vercel.app](https://lumpmap3d.vercel.app/)
 - **Build window evidence:** the repository's first commit and all subsequent
   implementation commits are dated July 21, 2026.
 

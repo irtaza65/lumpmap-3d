@@ -8,7 +8,7 @@
     "type": "git",
     "url": "https://github.com/irtaza65/lumpmap-3d.git"
   },
-  "homepage": "https://lumpmap-3d.nn3834428256300.chatgpt.site/",
+  "homepage": "https://lumpmap3d.vercel.app/",
   "engines": {
     "node": ">=22.13.0"
   },
