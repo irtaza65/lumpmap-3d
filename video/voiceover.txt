@@ -1,0 +1,27 @@
+A lump can look identical on the surface—and be completely different underneath.
+
+After dealing with cyst-related issues myself, I wanted the health explainer I wish I had: visual, private, multilingual, and honest about uncertainty. So I built LumpMap 3D.
+
+It starts with location. The interactive 3D atlas maps seventeen body regions, front and back, and works with an accessible region list. Select the top of the buttock cleft, and it surfaces patterns worth learning about.
+
+Then it changes scale—from the body to what may be happening beneath the skin.
+
+Here, pilonidal disease is not presented as just another cyst. Three procedural cutaways show a normal cleft, a pit and sinus tract, and an inflamed stage, alongside care guidance and source-linked facts.
+
+Comparison mode holds scale constant, making a pilonidal sinus, a boil, and a true epidermoid cyst visually distinct.
+
+But people rarely describe health concerns in clinical language.
+
+A user can write in English, Urdu, or Roman Urdu. With a server key, GPT-5.6 converts everyday language into a strict Structured Output schema. The public demo also keeps a local fallback, so the experience remains testable without exposing a key.
+
+The model does not diagnose and cannot choose urgency. Curated local records explain possible patterns, while the Visit Note includes only facts the user actually supplied.
+
+Safety is deterministic. Severe pain, swelling, fever, or a location directly beside the anus triggers same-day guidance through local rules. GPT-5.6 cannot downgrade that result.
+
+That boundary is deliberate: language understanding on one side; safety authority on the other.
+
+I used Codex as my primary engineering and design collaborator: scaffolding the Next.js app, building procedural Three.js anatomy, refining accessibility and privacy, and writing fifty-six focused tests. The implementation was developed in this Codex task.
+
+Every lesson shows sources and review dates. There are no accounts, trackers, uploads, or saved health histories.
+
+LumpMap 3D does not tell people what they have. It helps them see what differs, what matters, and when to seek care.

@@ -44,3 +44,11 @@ next-env.d.ts
 /.wrangler/
 /outputs/
 /work/
+# Local video-production media and renders (large binary files)
+video/raw/*.mp4
+video/raw/*.mov
+video/raw/*.mkv
+video/raw/*.wav
+video/raw/*.mp3
+video/rendered/*.mp4
+video/rendered/*.mov
