@@ -13,13 +13,34 @@ import { LUMP_EXTRACTION_SYSTEM_PROMPT } from "../../../lib/openai/systemPrompt"
 
 const MAX_REQUEST_BYTES = 16 * 1024;
 const DEFAULT_MODEL = "gpt-5.6";
+const RATE_LIMIT_WINDOW_MS = 60_000;
+const RATE_LIMIT_MAX_REQUESTS = 20;
+const RATE_LIMIT_MAX_TRACKED_KEYS = 2_048;
+const RATE_LIMIT_SALT = globalThis.crypto.randomUUID();
+
+type RateLimitEntry = {
+  count: number;
+  resetAt: number;
+};
+
+// Process-local by design: keys are salted, ephemeral hashes and disappear on
+// restart. This bounds spend without retaining IP addresses or health text.
+const rateLimitEntries = new Map<string, RateLimitEntry>();
 
 class PayloadTooLargeError extends Error {}
 
-function jsonError(status: number, code: string, message: string): Response {
+function jsonError(
+  status: number,
+  code: string,
+  message: string,
+  headers?: HeadersInit,
+): Response {
   return Response.json(
     { error: message, code },
-    { status, headers: { "cache-control": "no-store" } },
+    {
+      status,
+      headers: { "cache-control": "no-store", ...headers },
+    },
   );
 }
 
@@ -58,6 +79,70 @@ async function readBodyWithinLimit(request: Request): Promise<string> {
   } finally {
     reader.releaseLock();
   }
+}
+
+function deploymentClientAddress(request: Request): string {
+  const forwardedFor = request.headers.get("x-forwarded-for")?.split(",")[0];
+  const address =
+    request.headers.get("cf-connecting-ip") ??
+    request.headers.get("x-real-ip") ??
+    forwardedFor ??
+    "unattributed";
+
+  // Avoid letting an attacker inflate hashing work with an oversized header.
+  return address.trim().slice(0, 128) || "unattributed";
+}
+
+async function anonymousClientKey(request: Request): Promise<string> {
+  const digest = await globalThis.crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(
+      `${RATE_LIMIT_SALT}:${deploymentClientAddress(request)}`,
+    ),
+  );
+
+  return Array.from(new Uint8Array(digest), (byte) =>
+    byte.toString(16).padStart(2, "0"),
+  ).join("");
+}
+
+function pruneRateLimitEntries(now: number): void {
+  for (const [key, entry] of rateLimitEntries) {
+    if (entry.resetAt <= now) rateLimitEntries.delete(key);
+  }
+
+  while (rateLimitEntries.size >= RATE_LIMIT_MAX_TRACKED_KEYS) {
+    const oldestKey = rateLimitEntries.keys().next().value as string | undefined;
+    if (!oldestKey) break;
+    rateLimitEntries.delete(oldestKey);
+  }
+}
+
+async function checkRateLimit(
+  request: Request,
+): Promise<{ allowed: true } | { allowed: false; retryAfterSeconds: number }> {
+  const now = Date.now();
+  const key = await anonymousClientKey(request);
+  const existing = rateLimitEntries.get(key);
+
+  if (!existing || existing.resetAt <= now) {
+    if (!existing) pruneRateLimitEntries(now);
+    rateLimitEntries.set(key, {
+      count: 1,
+      resetAt: now + RATE_LIMIT_WINDOW_MS,
+    });
+    return { allowed: true };
+  }
+
+  if (existing.count >= RATE_LIMIT_MAX_REQUESTS) {
+    return {
+      allowed: false,
+      retryAfterSeconds: Math.max(1, Math.ceil((existing.resetAt - now) / 1_000)),
+    };
+  }
+
+  existing.count += 1;
+  return { allowed: true };
 }
 
 function normalizeModelExtraction(
@@ -112,6 +197,48 @@ function normalizeModelExtraction(
       explicit.diabetesOrImmunocompromised === true
         ? true
         : extraction.diabetesOrImmunocompromised,
+    troubleBreathing:
+      explicit.troubleBreathing === true
+        ? true
+        : extraction.troubleBreathing,
+    spreadingRednessOrSwelling:
+      explicit.spreadingRednessOrSwelling === true
+        ? true
+        : extraction.spreadingRednessOrSwelling,
+    severeSystemicSymptoms:
+      explicit.severeSystemicSymptoms === true
+        ? true
+        : extraction.severeSystemicSymptoms,
+    blackGreyBlisteringOrNumbSkin:
+      explicit.blackGreyBlisteringOrNumbSkin === true
+        ? true
+        : extraction.blackGreyBlisteringOrNumbSkin,
+    painOutOfProportion:
+      explicit.painOutOfProportion === true
+        ? true
+        : extraction.painOutOfProportion,
+    suddenOnset:
+      explicit.suddenOnset === true ? true : extraction.suddenOnset,
+    swelling: explicit.swelling === true ? true : extraction.swelling,
+    nearEyeOrCentralFace:
+      explicit.nearEyeOrCentralFace === true
+        ? true
+        : extraction.nearEyeOrCentralFace,
+    hardOrFixed:
+      explicit.hardOrFixed === true ? true : extraction.hardOrFixed,
+    steadilyGrowing:
+      explicit.steadilyGrowing === true
+        ? true
+        : extraction.steadilyGrowing,
+    unexplained:
+      explicit.unexplained === true ? true : extraction.unexplained,
+    persistent:
+      explicit.persistent === true ? true : extraction.persistent,
+    durationDays:
+      explicit.durationDays !== null
+        ? explicit.durationDays
+        : extraction.durationDays,
+    age: explicit.age !== null ? explicit.age : extraction.age,
   };
 
   return LumpDescriptionSchema.parse({
@@ -167,6 +294,16 @@ async function extractWithOpenAI(
 }
 
 export async function POST(request: Request): Promise<Response> {
+  const rateLimit = await checkRateLimit(request);
+  if (!rateLimit.allowed) {
+    return jsonError(
+      429,
+      "rate_limited",
+      "Too many requests. Please wait before trying again.",
+      { "retry-after": String(rateLimit.retryAfterSeconds) },
+    );
+  }
+
   let rawBody: string;
   try {
     rawBody = await readBodyWithinLimit(request);

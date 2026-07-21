@@ -51,7 +51,7 @@ The app never instructs a user to squeeze, pop, pierce, cut, or drain a lump. It
 
 `app/api/navigate/route.ts` uses the server-only OpenAI Responses API. The default is controlled by `OPENAI_MODEL`, with `gpt-5.6` as the fallback. It uses Structured Outputs with Zod because the model’s role is narrow: normalize everyday multilingual wording into the fixed `LumpDescription` shape and suggest at most three missing questions.
 
-The route uses `store: false`, disables SDK logging, rejects unknown fields, caps descriptions at 4,000 characters and request bodies at 16 KiB, and never logs raw health text. `OPENAI_API_KEY` is referenced only in the server route and cannot enter the client bundle.
+The route uses `store: false`, disables SDK logging, rejects unknown fields, caps descriptions at 4,000 characters and request bodies at 16 KiB, and never logs raw health text. A bounded process-local rate limit hashes short-lived client identifiers before any model call; it retains neither raw IP addresses nor health descriptions. `OPENAI_API_KEY` is referenced only in the server route and cannot enter the client bundle.
 
 The model does **not** diagnose, choose urgency, invent treatments, recommend medicines/doses, or add medical facts and sources. Matching, red flags, care messages, condition copy, and sources remain deterministic and local.
 
@@ -152,4 +152,5 @@ Every displayed condition exposes its own URLs and `lastReviewed` date from the 
 - A licensed clinician must review the content, triage language, and country-specific care pathways before real-world clinical use.
 - Procedural anatomy is intentionally schematic and cannot represent every body or presentation.
 - Demo parsing recognizes representative phrasing; broader natural language requires the optional OpenAI route.
+- The included rate limiter is a bounded per-process safeguard; a public clinical pilot should add a shared edge-level quota or managed abuse-control service.
 - Before public deployment, add clinical governance, content review/versioning, localization review by native speakers, accessibility testing with assistive-technology users, and region-specific emergency-care configuration.

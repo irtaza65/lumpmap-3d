@@ -24,10 +24,16 @@ afterEach(() => {
   globalThis.fetch = savedFetch;
 });
 
-function requestWithBody(body: string): Request {
+let testClientSequence = 0;
+
+function requestWithBody(body: string, clientAddress?: string): Request {
+  const address = clientAddress ?? `2001:db8::${++testClientSequence}`;
   return new Request("http://localhost/api/navigate", {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: {
+      "content-type": "application/json",
+      "cf-connecting-ip": address,
+    },
     body,
   });
 }
@@ -85,6 +91,44 @@ test("no-key Demo Mode returns strict extraction with no urgency field", async (
   assert.equal(evaluateTriage(result.description).category, "same_day_urgent");
   assert.equal(LumpDescriptionSchema.safeParse(result.description).success, true);
   assert.ok(result.description.suggestedFollowUpQuestions.length <= 3);
+});
+
+test("explicit emergency wording survives Demo Mode extraction", async () => {
+  const response = await POST(
+    requestWithBody(
+      JSON.stringify({
+        text: "The skin is black and numb, and the pain is much worse than it looks.",
+      }),
+    ),
+  );
+  const result = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.equal(result.description.blackGreyBlisteringOrNumbSkin, true);
+  assert.equal(result.description.painOutOfProportion, true);
+  assert.equal(evaluateTriage(result.description).category, "emergency_now");
+});
+
+test("Demo Mode preserves every emergency rule family from plain text", async (t) => {
+  const samples = [
+    "I have sudden severe pain with a lump inside my testicle.",
+    "I have a lump and trouble breathing.",
+    "The redness is spreading and I have severe whole-body symptoms.",
+    "The skin is black and numb around a rapidly worsening painful area.",
+    "The pain is much worse than it looks.",
+  ];
+
+  for (const sample of samples) {
+    await t.test(sample, async () => {
+      const response = await POST(
+        requestWithBody(JSON.stringify({ text: sample })),
+      );
+      const result = await response.json();
+
+      assert.equal(response.status, 200);
+      assert.equal(evaluateTriage(result.description).category, "emergency_now");
+    });
+  }
 });
 
 test("OpenAI request uses strict Responses output, no storage, and the safe fallback model", async () => {
@@ -324,4 +368,40 @@ test("Demo Mode keeps scrotal skin distinct from inside-testicle wording", async
     assert.equal(result.description.bodyRegion, "inside_testicle");
     assert.equal(result.description.layer, "deep_or_internal");
   });
+});
+
+test("rate limits a repeated client without echoing private input", async () => {
+  const clientAddress = "203.0.113.42";
+  const privateText = "A private health description that must not be echoed.";
+
+  for (let requestNumber = 0; requestNumber < 20; requestNumber += 1) {
+    const response = await POST(
+      requestWithBody(JSON.stringify({ text: privateText }), clientAddress),
+    );
+    assert.equal(response.status, 200);
+  }
+
+  const blocked = await POST(
+    requestWithBody(JSON.stringify({ text: privateText }), clientAddress),
+  );
+  const retryAfter = Number(blocked.headers.get("retry-after"));
+  const body = await blocked.json();
+
+  assert.equal(blocked.status, 429);
+  assert.equal(blocked.headers.get("cache-control"), "no-store");
+  assert.ok(Number.isInteger(retryAfter));
+  assert.ok(retryAfter >= 1 && retryAfter <= 60);
+  assert.deepEqual(body, {
+    error: "Too many requests. Please wait before trying again.",
+    code: "rate_limited",
+  });
+  assert.doesNotMatch(JSON.stringify(body), new RegExp(privateText));
+
+  const separateClient = await POST(
+    requestWithBody(
+      JSON.stringify({ text: "A lump on my wrist." }),
+      "203.0.113.43",
+    ),
+  );
+  assert.equal(separateClient.status, 200);
 });

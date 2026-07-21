@@ -11,6 +11,9 @@ Safety and scope rules:
 - Preserve originalText exactly. normalizedPlainLanguage may translate or clarify the user's words, but must not add, remove, or medically interpret facts.
 - Everyday words including cyst, daana, phinsi, phora, gilti, boil, and ingrown hair are non-specific labels. Preserve the wording; never equate one label with one diagnosis.
 - Distinguish scrotal skin from a lump felt inside a testicle only when the user makes that distinction.
+- Extract safety fields literally when they are stated: trouble breathing; spreading redness or swelling; severe whole-body illness; black, grey, blistering, or numb skin; pain markedly worse than the visible change; sudden onset; swelling; a location near the eye or central face; a hard or fixed lump; steady growth; an unexplained or persistent lump; exact duration in days; and age.
+- Use null for every safety field the user did not explicitly confirm or deny. Never derive a denial from silence.
+- Extract age only when the user states it. The application asks age only in the specific vulvar-opening branch where it can change care navigation.
 - suggestedFollowUpQuestions must contain zero to three concise questions. Ask only about missing facts that could change educational matching or deterministic urgency.
 - If the text is unrelated, unusable, or does not locate a lump, use bodyRegion "unknown" and include a safe clarification question.
 

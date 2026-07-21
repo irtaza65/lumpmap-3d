@@ -29,7 +29,7 @@ import {
   X,
 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 
 import {
   ATLAS_SCOPE_NOTE,
@@ -157,7 +157,9 @@ export default function LumpMapApp() {
   const [compareIds, setCompareIds] =
     useState<ConditionId[]>(DEFAULT_COMPARE);
   const [guideOpen, setGuideOpen] = useState(false);
+  const [guideResetKey, setGuideResetKey] = useState(0);
   const [copied, setCopied] = useState(false);
+  const atlasHeadingRef = useRef<HTMLHeadingElement>(null);
 
   const selectedRegionRecord = getRegionRecord(selectedRegion);
   const condition = CONDITION_BY_ID[selectedCondition];
@@ -209,6 +211,33 @@ export default function LumpMapApp() {
     setDetailTab("pattern");
   }
 
+  function openConditionInAtlas(id: ConditionId, preferredRegion?: string) {
+    const targetCondition = CONDITION_BY_ID[id];
+    const isAtlasRegion = (regionId: string | undefined): regionId is AtlasRegionId =>
+      Boolean(
+        regionId &&
+          regionId !== "unknown" &&
+          Object.prototype.hasOwnProperty.call(REGION_BY_ID, regionId),
+      );
+    const targetRegionId = isAtlasRegion(preferredRegion)
+      ? preferredRegion
+      : targetCondition.bodyRegions.find(isAtlasRegion);
+
+    if (targetRegionId) {
+      const region = REGION_BY_ID[targetRegionId];
+      setSelectedRegion(region.id as BodyRegionId);
+      if (region.view === "front" || region.view === "back") {
+        setOrientation(region.view);
+      }
+    }
+
+    openCondition(id);
+    window.requestAnimationFrame(() => {
+      scrollToId("atlas");
+      atlasHeadingRef.current?.focus({ preventScroll: true });
+    });
+  }
+
   function clearSession() {
     setSelectedRegion("natal_cleft");
     setSelectedCondition("pilonidal-disease");
@@ -216,6 +245,7 @@ export default function LumpMapApp() {
     setOrientation("back");
     setStage(1);
     setGuideOpen(false);
+    setGuideResetKey((key) => key + 1);
   }
 
   return (
@@ -360,7 +390,7 @@ export default function LumpMapApp() {
         <div className="section-heading atlas-heading">
           <div>
             <p className="eyebrow">Interactive atlas</p>
-            <h2>Start with where it is.</h2>
+            <h2 ref={atlasHeadingRef} tabIndex={-1}>Start with where it is.</h2>
           </div>
           <p>
             Location is a useful clue—never a diagnosis. Rotate the body or use
@@ -596,7 +626,7 @@ export default function LumpMapApp() {
                   <p>{item.isActuallyACyst ? "True cyst family" : "Not simply a cyst"}</p>
                   <h3>{item.name}</h3>
                   <span>{item.tissueOrigin}</span>
-                  <button type="button" onClick={() => openCondition(item.id)}>
+                  <button type="button" onClick={() => openConditionInAtlas(item.id)}>
                     Inspect in 3D <ArrowRight />
                   </button>
                 </div>
@@ -611,12 +641,14 @@ export default function LumpMapApp() {
       </section>
 
       <GuideSection
+        key={guideResetKey}
         open={guideOpen}
         onOpenChange={setGuideOpen}
         onExploreRegion={(region) => {
           selectRegion(region as AtlasRegionId);
           scrollToId("atlas");
         }}
+        onExploreCondition={(id, region) => openConditionInAtlas(id, region)}
       />
 
       <section id="sources" className="source-section section-shell">
@@ -782,12 +814,11 @@ function ConditionInsight({
       <h3>{condition.name}</h3>
       <p className="panel-intro">{condition.oneLineDefinition}</p>
 
-      <div className="detail-tabs" role="tablist" aria-label="Condition information">
+      <div className="detail-tabs" aria-label="Condition information">
         {(["pattern", "care", "reduce", "sources"] as const).map((item) => (
           <button
             type="button"
-            role="tab"
-            aria-selected={tab === item}
+            aria-pressed={tab === item}
             key={item}
             onClick={() => onTabChange(item)}
           >
@@ -890,10 +921,12 @@ function GuideSection({
   open,
   onOpenChange,
   onExploreRegion,
+  onExploreCondition,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onExploreRegion: (region: string) => void;
+  onExploreCondition: (condition: ConditionId, region: string) => void;
 }) {
   const [text, setText] = useState("");
   const [loading, setLoading] = useState(false);
@@ -903,6 +936,7 @@ function GuideSection({
   const [description, setDescription] = useState<GuideDescription | null>(null);
   const [visitCopied, setVisitCopied] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const resultsRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (open) inputRef.current?.focus();
@@ -911,9 +945,8 @@ function GuideSection({
   useEffect(() => {
     if (!description) return;
     const frame = window.requestAnimationFrame(() => {
-      document
-        .getElementById("guide-results")
-        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+      resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      resultsRef.current?.focus({ preventScroll: true });
     });
     return () => window.cancelAnimationFrame(frame);
   }, [description]);
@@ -973,6 +1006,9 @@ function GuideSection({
       }[triage.category]
     : "";
   const visitNote = description ? buildVisitNote(description) : "";
+  const interpretedLanguage = languagePresentation(
+    description?.language ?? "english",
+  );
 
   return (
     <section id="guide" className="guide-section">
@@ -999,7 +1035,17 @@ function GuideSection({
           </div>
         </div>
 
-        <div className={open ? "guide-console open" : "guide-console"}>
+        <div
+          className={open ? "guide-console open" : "guide-console"}
+          aria-busy={loading}
+        >
+          <p className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+            {loading
+              ? "Checking your description."
+              : description && triage
+                ? `Educational guidance ready. Care level: ${triageEyebrow}.`
+                : ""}
+          </p>
           {!description ? (
             flowMode === "guided" ? (
               <GuidedQuestionFlow
@@ -1020,6 +1066,7 @@ function GuideSection({
                 <span className="sr-only">Describe your lump</span>
                 <textarea
                   ref={inputRef}
+                  dir="auto"
                   value={text}
                   maxLength={4000}
                   onFocus={() => onOpenChange(true)}
@@ -1056,7 +1103,14 @@ function GuideSection({
             </>
             )
           ) : (
-            <div id="guide-results" className="guide-results">
+            <div
+              id="guide-results"
+              ref={resultsRef}
+              className="guide-results"
+              role="region"
+              aria-label="Educational guidance results"
+              tabIndex={-1}
+            >
               <div className={`triage-banner ${triageTone}`}>
                 <div><HeartPulse /><span>{triageEyebrow}</span></div>
                 <h3>{triage?.title}</h3>
@@ -1068,7 +1122,9 @@ function GuideSection({
 
               <div className="interpretation-card">
                 <div className="result-section-head"><span>Structured interpretation</span><span>{mode === "openai" ? "Language model + safety rules" : "No-key demo rules"}</span></div>
-                <p>{description.normalizedPlainLanguage || description.originalText}</p>
+                <p lang={interpretedLanguage.lang} dir={interpretedLanguage.dir}>
+                  {description.normalizedPlainLanguage || description.originalText}
+                </p>
                 <div className="fact-chips">
                   <span><LocateFixed /> {humanize(description.bodyRegion)}</span>
                   <span><Layers3 /> {humanize(description.layer)}</span>
@@ -1082,8 +1138,25 @@ function GuideSection({
                 {likelyCards.map((match) => (
                   <article key={match.conditionId}>
                     <span className="condition-dot" style={{ backgroundColor: match.condition.scene3d.accentColor }} />
-                    <div><h4>{match.condition.name}</h4><p>{match.whyRelevant}</p></div>
-                    <button type="button" aria-label={`Explore ${match.condition.name}`} onClick={() => onExploreRegion(description.bodyRegion)}><ChevronRight /></button>
+                    <div className="result-condition-copy">
+                      <h4>{match.condition.name}</h4>
+                      <p>{match.whyRelevant}</p>
+                      <div className="result-condition-meta">
+                        <span>Reviewed {match.condition.lastReviewed}</span>
+                        {match.condition.sourceUrls.slice(0, 2).map((sourceUrl, index) => (
+                          <a key={sourceUrl} href={sourceUrl} target="_blank" rel="noreferrer">
+                            Source {index + 1}: {sourceDomain(sourceUrl)}
+                          </a>
+                        ))}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      aria-label={`Explore ${match.condition.name} in the 3D atlas`}
+                      onClick={() => onExploreCondition(match.conditionId, description.bodyRegion)}
+                    >
+                      <span>Explore condition</span><ChevronRight />
+                    </button>
                   </article>
                 ))}
               </div>
@@ -1200,6 +1273,21 @@ function GuidedQuestionFlow({
         draft.frictionOrProlongedSitting ?? null,
       diabetesOrImmunocompromised:
         draft.diabetesOrImmunocompromised ?? null,
+      troubleBreathing: draft.troubleBreathing ?? null,
+      spreadingRednessOrSwelling: draft.spreadingRednessOrSwelling ?? null,
+      severeSystemicSymptoms: draft.severeSystemicSymptoms ?? null,
+      blackGreyBlisteringOrNumbSkin:
+        draft.blackGreyBlisteringOrNumbSkin ?? null,
+      painOutOfProportion: draft.painOutOfProportion ?? null,
+      suddenOnset: draft.suddenOnset ?? null,
+      swelling: draft.swelling ?? null,
+      nearEyeOrCentralFace: draft.nearEyeOrCentralFace ?? null,
+      hardOrFixed: draft.hardOrFixed ?? null,
+      steadilyGrowing: draft.steadilyGrowing ?? null,
+      unexplained: draft.unexplained ?? null,
+      persistent: draft.persistent ?? null,
+      durationDays: draft.durationDays ?? null,
+      age: draft.age ?? null,
       unknowns,
       suggestedFollowUpQuestions: [],
     });
@@ -1311,6 +1399,32 @@ function GuidedQuestionFlow({
                 onChange={(value) => setAnswer("trend", value as LumpDescription["trend"])}
               />
             </fieldset>
+            <label className="guided-number-field">
+              <span>Exact duration in days <small>Optional</small></span>
+              <input
+                type="number"
+                inputMode="numeric"
+                min={0}
+                max={36500}
+                value={draft.durationDays ?? ""}
+                onChange={(event) => {
+                  const nextValue = event.currentTarget.value;
+                  setAnswer(
+                    "durationDays",
+                    nextValue === "" ? null : Number(nextValue),
+                  );
+                }}
+                placeholder="For example, 14"
+              />
+            </label>
+            {(draft.bodyRegion === "inside_testicle" ||
+              draft.bodyRegion === "scrotal_skin") && (
+              <TriStateRow
+                label="Did the pain or swelling start suddenly?"
+                value={draft.suddenOnset}
+                onChange={(value) => setAnswer("suddenOnset", value)}
+              />
+            )}
           </>
         )}
 
@@ -1329,6 +1443,11 @@ function GuidedQuestionFlow({
               ]}
               onChange={(value) => setAnswer("pain", value as LumpDescription["pain"])}
             />
+            <TriStateRow
+              label="Is the pain much worse than the visible change?"
+              value={draft.painOutOfProportion}
+              onChange={(value) => setAnswer("painOutOfProportion", value)}
+            />
           </>
         )}
 
@@ -1341,6 +1460,32 @@ function GuidedQuestionFlow({
               value={draft.rednessOrWarmth}
               onChange={(value) => setAnswer("rednessOrWarmth", value)}
             />
+            <TriStateRow
+              label="Swelling"
+              value={draft.swelling}
+              onChange={(value) => setAnswer("swelling", value)}
+            />
+            <TriStateRow
+              label="Redness or swelling spreading away from the lump"
+              value={draft.spreadingRednessOrSwelling}
+              onChange={(value) =>
+                setAnswer("spreadingRednessOrSwelling", value)
+              }
+            />
+            <TriStateRow
+              label="Black, grey, blistering, or numb skin"
+              value={draft.blackGreyBlisteringOrNumbSkin}
+              onChange={(value) =>
+                setAnswer("blackGreyBlisteringOrNumbSkin", value)
+              }
+            />
+            {draft.bodyRegion === "scalp_face" && (
+              <TriStateRow
+                label="The swelling is near the eye or central face"
+                value={draft.nearEyeOrCentralFace}
+                onChange={(value) => setAnswer("nearEyeOrCentralFace", value)}
+              />
+            )}
             <fieldset className="option-fieldset">
               <legend>Drainage</legend>
               <OptionGrid
@@ -1366,6 +1511,10 @@ function GuidedQuestionFlow({
             <TriStateRow label="Has happened before" value={draft.recurrent} onChange={(value) => setAnswer("recurrent", value)} />
             <TriStateRow label="More than one lump" value={draft.multipleLesions} onChange={(value) => setAnswer("multipleLesions", value)} />
             <TriStateRow label="Pits, tunnels, or scars" value={draft.tunnelsPitsOrScars} onChange={(value) => setAnswer("tunnelsPitsOrScars", value)} />
+            <TriStateRow label="Feels hard or fixed in place" value={draft.hardOrFixed} onChange={(value) => setAnswer("hardOrFixed", value)} />
+            <TriStateRow label="Has been steadily growing" value={draft.steadilyGrowing} onChange={(value) => setAnswer("steadilyGrowing", value)} />
+            <TriStateRow label="Persistent or not going away" value={draft.persistent} onChange={(value) => setAnswer("persistent", value)} />
+            <TriStateRow label="New with no known explanation" value={draft.unexplained} onChange={(value) => setAnswer("unexplained", value)} />
           </>
         )}
 
@@ -1375,6 +1524,8 @@ function GuidedQuestionFlow({
             <p>Whole-body symptoms can make the situation more urgent.</p>
             <TriStateRow label="Fever or chills" value={draft.feverOrChills} onChange={(value) => setAnswer("feverOrChills", value)} />
             <TriStateRow label="Faint, confused, or very unwell" value={draft.faintConfusedOrVeryUnwell} onChange={(value) => setAnswer("faintConfusedOrVeryUnwell", value)} />
+            <TriStateRow label="Trouble breathing" value={draft.troubleBreathing} onChange={(value) => setAnswer("troubleBreathing", value)} />
+            <TriStateRow label="Severe whole-body symptoms" value={draft.severeSystemicSymptoms} onChange={(value) => setAnswer("severeSystemicSymptoms", value)} />
           </>
         )}
 
@@ -1385,6 +1536,25 @@ function GuidedQuestionFlow({
             <TriStateRow label="Recent shaving or waxing" value={draft.recentHairRemoval} onChange={(value) => setAnswer("recentHairRemoval", value)} />
             <TriStateRow label="Friction, tight clothing, or prolonged sitting" value={draft.frictionOrProlongedSitting} onChange={(value) => setAnswer("frictionOrProlongedSitting", value)} />
             <TriStateRow label="Diabetes or weakened immunity" value={draft.diabetesOrImmunocompromised} onChange={(value) => setAnswer("diabetesOrImmunocompromised", value)} sensitive />
+            {draft.bodyRegion === "vulvar_opening" && (
+              <label className="guided-number-field sensitive-field">
+                <span>
+                  Age <small>Optional • asked only because it can change follow-up for a new Bartholin-area lump</small>
+                </span>
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  min={0}
+                  max={125}
+                  value={draft.age ?? ""}
+                  onChange={(event) => {
+                    const nextValue = event.currentTarget.value;
+                    setAnswer("age", nextValue === "" ? null : Number(nextValue));
+                  }}
+                  placeholder="Age in years"
+                />
+              </label>
+            )}
           </>
         )}
       </div>
@@ -1447,19 +1617,61 @@ function TriStateRow({
   onChange: (value: boolean | null) => void;
   sensitive?: boolean;
 }) {
+  const groupName = useId();
+  const options: Array<{
+    label: string;
+    selected: boolean;
+    value: boolean | null;
+  }> = [
+    { label: "Yes", selected: value === true, value: true },
+    { label: "No", selected: value === false, value: false },
+    { label: "Not sure", selected: value === null, value: null },
+  ];
+
   return (
-    <div className="tri-state-row">
-      <div>
+    <fieldset className="tri-state-row">
+      <legend className="sr-only">
+        {label}
+        {sensitive ? ". Optional; asked because infection risk can differ." : ""}
+      </legend>
+      <div aria-hidden="true">
         <strong>{label}</strong>
         {sensitive && <span>Optional • asked because infection risk can differ</span>}
       </div>
-      <div>
-        <button type="button" className={value === true ? "selected" : undefined} onClick={() => onChange(true)}>Yes</button>
-        <button type="button" className={value === false ? "selected" : undefined} onClick={() => onChange(false)}>No</button>
-        <button type="button" className={value === null ? "selected" : undefined} onClick={() => onChange(null)}>Not sure</button>
+      <div className="tri-state-options">
+        {options.map((option) => (
+          <label className={option.selected ? "selected" : undefined} key={option.label}>
+            <input
+              className="sr-only"
+              type="radio"
+              name={groupName}
+              checked={option.selected}
+              onChange={() => onChange(option.value)}
+            />
+            {option.label}
+          </label>
+        ))}
       </div>
-    </div>
+    </fieldset>
   );
+}
+
+function languagePresentation(language: LumpDescription["language"]): {
+  lang: string;
+  dir: "ltr" | "rtl" | "auto";
+} {
+  if (language === "urdu") return { lang: "ur", dir: "rtl" };
+  if (language === "roman_urdu") return { lang: "ur-Latn", dir: "ltr" };
+  if (language === "mixed") return { lang: "ur", dir: "auto" };
+  return { lang: "en", dir: "ltr" };
+}
+
+function sourceDomain(sourceUrl: string) {
+  try {
+    return new URL(sourceUrl).hostname.replace(/^www\./, "");
+  } catch {
+    return "medical source";
+  }
 }
 
 function humanize(value: string) {

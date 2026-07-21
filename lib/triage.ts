@@ -62,14 +62,7 @@ export interface LumpDescription {
   recentHairRemoval: boolean | null;
   frictionOrProlongedSitting: boolean | null;
   diabetesOrImmunocompromised: boolean | null;
-  unknowns: string[];
-  suggestedFollowUpQuestions: string[];
-}
-
-export interface SafetySignals {
-  /** Asked when acute chest/breathing or severe-illness language is present. */
   troubleBreathing?: boolean | null;
-  /** Redness or swelling visibly extending away from the lump. */
   spreadingRednessOrSwelling?: boolean | null;
   severeSystemicSymptoms?: boolean | null;
   blackGreyBlisteringOrNumbSkin?: boolean | null;
@@ -82,11 +75,32 @@ export interface SafetySignals {
   unexplained?: boolean | null;
   persistent?: boolean | null;
   durationDays?: number | null;
-  /** Asked only for a possible Bartholin-area lump, with an explanation. */
   age?: number | null;
+  unknowns: string[];
+  suggestedFollowUpQuestions: string[];
 }
 
-export type TriageInput = Partial<LumpDescription> & SafetySignals;
+export type SafetySignals = Partial<
+  Pick<
+    LumpDescription,
+    | "troubleBreathing"
+    | "spreadingRednessOrSwelling"
+    | "severeSystemicSymptoms"
+    | "blackGreyBlisteringOrNumbSkin"
+    | "painOutOfProportion"
+    | "suddenOnset"
+    | "swelling"
+    | "nearEyeOrCentralFace"
+    | "hardOrFixed"
+    | "steadilyGrowing"
+    | "unexplained"
+    | "persistent"
+    | "durationDays"
+    | "age"
+  >
+>;
+
+export type TriageInput = Partial<LumpDescription>;
 
 export type TriageCategory =
   | "emergency_now"

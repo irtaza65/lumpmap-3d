@@ -344,7 +344,7 @@ export function parseDemoDescription(originalText: string): LumpDescription {
   );
   const faintConfusedOrVeryUnwell = detectNullableBoolean(
     text,
-    ["fainted", "fainting", "confused", "very unwell", "severely unwell", "trouble breathing"],
+    ["fainted", "fainting", "confused", "very unwell", "severely unwell"],
     [
       "not faint",
       "not fainting",
@@ -352,8 +352,6 @@ export function parseDemoDescription(originalText: string): LumpDescription {
       "not feeling unwell",
       "not very unwell",
       "not severely unwell",
-      "no trouble breathing",
-      "breathing normally",
     ],
   );
   const recurrent = detectNullableBoolean(
@@ -405,6 +403,137 @@ export function parseDemoDescription(originalText: string): LumpDescription {
       "normal immune system",
     ],
   );
+  const troubleBreathing = detectNullableBoolean(
+    text,
+    ["trouble breathing", "difficulty breathing", "short of breath", "cannot breathe", "can't breathe"],
+    ["no trouble breathing", "breathing normally", "not short of breath"],
+  );
+  const spreadingRednessOrSwelling = detectNullableBoolean(
+    text,
+    [
+      "spreading redness",
+      "redness is spreading",
+      "redness spreading",
+      "spreading swelling",
+      "swelling is spreading",
+      "swelling spreading",
+      "red area getting bigger quickly",
+    ],
+    [
+      "redness is not spreading",
+      "redness isn't spreading",
+      "no spreading redness",
+      "swelling is not spreading",
+      "swelling isn't spreading",
+      "no spreading swelling",
+    ],
+  );
+  const severeSystemicSymptoms = detectNullableBoolean(
+    text,
+    [
+      "severe whole-body symptoms",
+      "severe systemic symptoms",
+      "severely unwell",
+      "very unwell",
+    ],
+    [
+      "no whole-body symptoms",
+      "no systemic symptoms",
+      "not severely unwell",
+      "not very unwell",
+    ],
+  );
+  const blackGreyBlisteringOrNumbSkin = detectNullableBoolean(
+    text,
+    [
+      "skin is black",
+      "skin turned black",
+      "black patch",
+      "skin is grey",
+      "skin turned grey",
+      "grey patch",
+      "blistering skin",
+      "skin is blistering",
+      "numb skin",
+      "skin is numb",
+    ],
+    [
+      "skin is not black",
+      "skin is not grey",
+      "no black skin",
+      "no grey skin",
+      "no blistering",
+      "skin is not numb",
+      "no numbness",
+    ],
+  );
+  const painOutOfProportion = detectNullableBoolean(
+    text,
+    [
+      "pain out of proportion",
+      "pain much worse than it looks",
+      "pain is much worse than it looks",
+      "severe pain with little to see",
+      "extreme pain with little to see",
+    ],
+    [
+      "pain is not out of proportion",
+      "pain matches what i can see",
+      "pain is not worse than it looks",
+    ],
+  );
+  const suddenOnset = detectNullableBoolean(
+    text,
+    [
+      "sudden onset",
+      "started suddenly",
+      "came on suddenly",
+      "began suddenly",
+      "started abruptly",
+      "sudden",
+      "suddenly",
+    ],
+    ["not sudden", "did not start suddenly", "gradual onset", "started gradually"],
+  );
+  const swelling = detectNullableBoolean(
+    text,
+    ["swelling", "swollen"],
+    ["no swelling", "not swollen", "without swelling"],
+  );
+  const nearEyeOrCentralFace = detectNullableBoolean(
+    text,
+    ["near my eye", "near the eye", "beside my eye", "beside the eye", "central face", "around my nose", "around the nose"],
+    ["not near my eye", "not near the eye", "away from my eye", "away from the eye"],
+  );
+  const hardOrFixed = detectNullableBoolean(
+    text,
+    ["hard lump", "feels hard", "fixed lump", "feels fixed", "does not move", "doesn't move"],
+    ["not hard", "soft lump", "not fixed", "moves freely", "moveable", "movable"],
+  );
+  const steadilyGrowing = detectNullableBoolean(
+    text,
+    ["steadily growing", "keeps growing", "continuing to grow", "getting steadily bigger"],
+    ["not growing", "has stopped growing", "not getting bigger"],
+  );
+  const unexplained = detectNullableBoolean(
+    text,
+    ["unexplained lump", "no known reason", "without a known reason"],
+    ["not unexplained", "known cause"],
+  );
+  const persistent = detectNullableBoolean(
+    text,
+    ["persistent lump", "will not go away", "won't go away", "still there after"],
+    ["not persistent", "went away", "has gone away"],
+  );
+  const durationMatch = text.match(
+    /\b(?:for|over|past|since)\s+(\d{1,5})\s*days?\b/i,
+  );
+  const durationDays = durationMatch ? Number(durationMatch[1]) : null;
+  const ageMatch =
+    bodyRegion === "vulvar_opening"
+      ? text.match(/\b(?:i am|i'm|age|aged)\s*:?[\s]*(\d{1,3})\b/i)
+      : null;
+  const age = ageMatch ? Number(ageMatch[1]) : null;
 
   const coreValues = {
     bodyRegion,
@@ -430,6 +559,20 @@ export function parseDemoDescription(originalText: string): LumpDescription {
     recentHairRemoval,
     frictionOrProlongedSitting,
     diabetesOrImmunocompromised,
+    troubleBreathing,
+    spreadingRednessOrSwelling,
+    severeSystemicSymptoms,
+    blackGreyBlisteringOrNumbSkin,
+    painOutOfProportion,
+    suddenOnset,
+    swelling,
+    nearEyeOrCentralFace,
+    hardOrFixed,
+    steadilyGrowing,
+    unexplained,
+    persistent,
+    durationDays,
+    age,
     unknowns: buildUnknowns(coreValues),
     suggestedFollowUpQuestions: buildFollowUpQuestions(coreValues),
   });
