@@ -43,6 +43,7 @@ import {
 import {
   REGION_BY_ID,
   REGIONS,
+  SELECTABLE_ATLAS_REGIONS,
   type AtlasRegionId,
   type RegionRecord,
 } from "@/lib/regions";
@@ -195,7 +196,7 @@ export default function LumpMapApp() {
 
   const filteredRegions = useMemo(() => {
     const normalized = regionSearch.trim().toLowerCase();
-    const allRegions = REGIONS.filter((region) => region.id !== "unknown");
+    const allRegions = SELECTABLE_ATLAS_REGIONS;
     if (!normalized) {
       return showAllRegions
         ? allRegions
@@ -313,7 +314,10 @@ export default function LumpMapApp() {
           regionId !== "unknown" &&
           Object.prototype.hasOwnProperty.call(REGION_BY_ID, regionId),
       );
-    const resolveAtlasRegion = (regionId: string | undefined): AtlasRegionId | undefined => {
+    const resolveAtlasRegion = (
+      regionId: string | undefined,
+    ): AtlasRegionId | undefined => {
+      if (regionId === "limb_other") return "arms";
       if (isAtlasRegion(regionId)) return regionId;
       return REGIONS.find((region) => region.bodyRegion === regionId)?.id;
     };

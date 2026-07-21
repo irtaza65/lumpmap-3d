@@ -372,6 +372,11 @@ export const REGIONS: RegionRecord[] = [
 
 export const regions = REGIONS;
 
+/** Regions intentionally exposed in the searchable/selectable body atlas. */
+export const SELECTABLE_ATLAS_REGIONS = REGIONS.filter(
+  (region) => region.id !== "unknown" && region.id !== "limb_other",
+);
+
 export const REGION_BY_ID = Object.fromEntries(
   REGIONS.map((region) => [region.id, region]),
 ) as Record<AtlasRegionId, RegionRecord>;

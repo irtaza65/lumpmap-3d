@@ -6,7 +6,11 @@ import {
   CONDITION_IDS,
   MEDICAL_REVIEW_NOTICE,
 } from "../lib/conditions";
-import { REGIONS } from "../lib/regions";
+import {
+  REGIONS,
+  REGION_BY_ID,
+  SELECTABLE_ATLAS_REGIONS,
+} from "../lib/regions";
 
 describe("curated medical content", () => {
   it("contains all 14 seeded condition families with complete source metadata", () => {
@@ -59,6 +63,14 @@ describe("curated medical content", () => {
     expect(insideTesticle?.safetyNote).toContain("prompt clinical assessment");
   });
 
+  it("exposes exactly 17 concrete regions in the selectable atlas", () => {
+    expect(SELECTABLE_ATLAS_REGIONS).toHaveLength(17);
+    expect(
+      SELECTABLE_ATLAS_REGIONS.some((region) => region.id === "limb_other"),
+    ).toBe(false);
+    expect(REGION_BY_ID.limb_other).toBeDefined();
+  });
+
   it("publishes the focused-atlas and clinician-review boundaries", () => {
     expect(ATLAS_SCOPE_NOTE).toContain("Internal-organ cysts");
     expect(MEDICAL_REVIEW_NOTICE).toBe(
@@ -66,4 +78,3 @@ describe("curated medical content", () => {
     );
   });
 });
-
