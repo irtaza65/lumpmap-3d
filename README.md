@@ -6,6 +6,83 @@ LumpMap 3D is an anatomy-first educational navigator for common visible or palpa
 
 Medical content should be reviewed by a licensed clinician before real-world clinical use.
 
+## OpenAI Build Week 2026
+
+LumpMap 3D was created from an empty repository during the OpenAI Build Week
+submission period on July 21, 2026. Codex with GPT-5.6 was the primary
+implementation partner. The entrant set the product direction, medical-safety
+boundary, scope, and design standard; Codex translated those decisions into the
+working application, tests, procedural 3D scenes, and deployment package.
+
+- **Track:** Apps for Your Life
+- **Primary Codex build thread:** `019f83ba-d355-7490-a9b2-464a168f195b`
+- **Public application:** [lumpmap-3d.nn3834428256300.chatgpt.site](https://lumpmap-3d.nn3834428256300.chatgpt.site/)
+- **Build window evidence:** the repository's first commit and all subsequent
+  implementation commits are dated July 21, 2026.
+
+## How I collaborated with Codex and GPT-5.6
+
+I brought the core problem from personal experience: people use the same casual
+word, such as *cyst*, *daana*, *phinsi*, *phora*, or *gilti*, for lumps that can
+begin in very different structures and require very different levels of care. I
+made the central product decisions:
+
+- teach anatomy and care navigation without claiming a diagnosis;
+- focus on visible or palpable superficial lumps rather than internal-organ
+  cysts;
+- keep urgency deterministic so a language model can never lower a red-flag
+  result;
+- support everyday English, Urdu, and Roman Urdu without treating colloquial
+  words as diagnoses;
+- avoid photo diagnosis and intimate image uploads;
+- connect a whole-body location map to condition-specific beneath-the-skin
+  lessons; and
+- use a calm, respectful, non-gory editorial design for sensitive health
+  education.
+
+Codex accelerated the work by scaffolding the Next.js application, turning the
+medical-safety requirements into typed schemas and deterministic rules, creating
+the reusable React Three Fiber scene system, implementing fourteen distinct
+three-stage cutaways, and building the responsive interaction layer. It also
+generated regression tests, exercised the app in a real browser at phone,
+tablet, and desktop sizes, found safety and accessibility gaps, and iterated on
+the implementation until lint, typecheck, tests, and the production build all
+passed.
+
+GPT-5.6 contributes in two ways. First, it powered the Codex implementation and
+review workflow. Second, the running product uses the GPT-5.6 Responses API with
+strict Structured Outputs to normalize an everyday multilingual description
+into a fixed symptom record. GPT-5.6 is deliberately not allowed to diagnose,
+choose urgency, invent treatments, or provide medical sources. Deterministic
+local code performs triage, educational matching, care messaging, and Visit Note
+generation.
+
+### Key engineering and design decisions
+
+1. **Two connected 3D scales.** A procedural body atlas answers "where is it?";
+   a separate tissue cutaway answers "what can differ beneath the skin?"
+2. **Model interpretation, rules-based safety.** Model output is parsed through
+   a strict Zod schema and is structurally unable to set a care level.
+3. **Explicit red-flag preservation.** Deterministic parsing protects critical
+   facts even if a model extraction omits them.
+4. **Curated content rather than generated medicine.** Fourteen typed condition
+   records contain reviewed-at-source educational copy and visible URLs.
+5. **Privacy by design.** There are no accounts, analytics, uploads, saved
+   histories, or client-exposed API keys; Responses requests use `store: false`.
+6. **Graceful no-key path.** Demo Mode and the complete guided flow remain usable
+   without an API key while never inventing unmentioned facts.
+
+### Build-period commit record
+
+| Commit | Time (Pakistan) | Milestone |
+| --- | --- | --- |
+| `0035922` | 2026-07-21 14:03 | Initial working anatomy navigator |
+| `d5864ea` | 2026-07-21 14:26 | Safety, privacy, and accessibility hardening |
+| `140d1ac` | 2026-07-21 14:33 | Edge-safe request limiting |
+| `6e0328f` | 2026-07-21 15:06 | Atlas and procedural anatomy redesign |
+| `c6752e2` | 2026-07-21 15:53 | Guided safety-flow polish |
+| `7ceacf4` | 2026-07-21 20:17 | Final editorial experience and distinct scenes |
+
 ## The problem
 
 Everyday words such as *cyst*, *daana*, *phinsi*, *phora*, *gilti*, *boil*, and *ingrown hair* are non-specific. A location can narrow what is worth learning about, but it cannot identify a condition. Depth, duration, pain, heat, redness, recurrence, drainage, follicle relationship, and whole-body symptoms also matter.
